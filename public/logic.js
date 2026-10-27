@@ -8,23 +8,23 @@
   const DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
   const DAYS_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
   const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-  const SETTINGS_VERSION = 4;
+  const SETTINGS_VERSION = 5;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
     'lockNow', 'unlock', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
-  const WED = { day: 3, start: '19:00', end: '22:00', openDay: 2, openTime: '12:00', max: 15, teams: 2, private: true, fixed: false };
+  const WED = { day: 3, start: '19:00', end: '22:00', openDay: 2, openTime: '12:00', max: 15, teams: 2, private: true, fixed: false, guests: false };
   function defaultSettings() {
     return {
       v: SETTINGS_VERSION,
       groupName: 'Vôlei Gran Felicitá',
       guestLimit: 3, paidPriority: false,
       schedule: [
-        { day: 1, start: '19:00', end: '22:00', openDay: 0, openTime: '12:00', max: 24, teams: 4, private: false, fixed: true },
+        { day: 1, start: '19:00', end: '22:00', openDay: 0, openTime: '12:00', max: 24, teams: 4, private: false, fixed: true, guests: true },
         Object.assign({}, WED),
-        { day: 4, start: '19:00', end: '22:00', openDay: 3, openTime: '12:00', max: 24, teams: 4, private: false, fixed: true }
+        { day: 4, start: '19:00', end: '22:00', openDay: 3, openTime: '12:00', max: 24, teams: 4, private: false, fixed: true, guests: true }
       ],
       manualLockUntil: 0
     };
@@ -60,7 +60,7 @@
         out.push({
           id: isoDate(y, m, d), day: g.day, start: g.start, end: g.end, startAt, endAt,
           openAt: spTs(y, m, d - before, g.openTime), openDay: g.openDay, openTime: g.openTime,
-          max: Number(g.max) || 24, teams: Number(g.teams) || 4, private: !!g.private, fixed: g.fixed !== false
+          max: Number(g.max) || 24, teams: Number(g.teams) || 4, private: !!g.private, fixed: g.fixed !== false, guests: g.guests !== undefined ? !!g.guests : !g.private
         });
         break;
       }
@@ -119,6 +119,10 @@
       /* v4: quarta passa a ter 2 times (8 e 7). */
       s.settings.schedule.forEach(g => { if (g.day === 3 && g.private && Number(g.teams) === 3) g.teams = 2; });
       for (const g of Object.values(s.games)) if (g.meta && g.meta.day === 3 && g.meta.private && g.meta.teams === 3) g.meta.teams = 2;
+    }
+    if (s.settings.v < 5) {
+      /* v5: convidado só nos jogos abertos (segunda e quinta). */
+      s.settings.schedule.forEach(g => { if (g.guests === undefined) g.guests = !g.private; });
     }
     s.settings.v = SETTINGS_VERSION;
     const act = activeGames(s, now);
@@ -356,7 +360,7 @@
             day, start, end, openDay, openTime,
             max: Math.min(60, Math.max(4, Math.round(Number(g.max) || 24))),
             teams: Math.min(8, Math.max(2, Math.round(Number(g.teams) || 4))),
-            private: !!g.private, fixed: !!g.fixed
+            private: !!g.private, fixed: !!g.fixed, guests: !!g.guests
           });
         }
         s.settings.schedule = list.sort((x, y) => x.day - y.day);
@@ -394,6 +398,7 @@
         const p = pm[a.pid];
         if (!p) return fail('Jogador não encontrado.');
         if (!p.guest && !canSee(meta, p)) return fail(`${p.name} não tem a bolinha desse jogo.`);
+        if (p.guest && !meta.guests && !admin) return fail('Esse jogo não aceita convidados.');
         if (isFixedHere(p)) {
           if (!admin && a.pid !== a.by) return fail('Só a própria pessoa ou um admin mexe na vaga da comissão.');
           v.out = v.out.filter(id => id !== p.id); log('add', p.id); return ok;
@@ -421,6 +426,7 @@
         return ok;
       }
       case 'addGuest': {
+        if (!meta.guests && !admin) return fail('Esse jogo não aceita convidados.');
         if (locked) return fail(lockMsg);
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva o nome do convidado.');
