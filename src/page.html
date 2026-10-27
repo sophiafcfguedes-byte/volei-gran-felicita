@@ -97,6 +97,19 @@ main { display: grid; gap: 14px; }
 .paid { font-size: .7rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--ball-ink); background: var(--ball); padding: 2px 7px; border-radius: 999px; flex: none; }
 .pos { font-size: .78rem; font-weight: 700; color: var(--court); font-variant-numeric: tabular-nums; flex: none; min-width: 2.2em; text-align: right; }
 .pos.wait { color: var(--warn); }
+.pos.fx { color: var(--ball-ink); background: var(--ball-soft); border: 1px solid var(--ball); border-radius: 999px; padding: 1px 8px; font-size: .72rem; min-width: 0; }
+.opens { grid-template-columns: auto 1fr; align-items: center; background: var(--ball-soft); border-color: var(--ball); }
+.mascot.sm { width: 64px; margin: 0; }
+.sched { display: grid; gap: 8px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+/* Folhinha de calendário no cabeçalho */
+.game { display: flex; align-items: center; gap: 14px; }
+.game-t { min-width: 0; display: grid; gap: 4px; }
+.cal { position: relative; flex: none; width: 74px; display: grid; justify-items: center; background: #FFFFFF; color: #2E4670; border-radius: 12px; overflow: hidden; box-shadow: 0 3px 0 rgb(0 0 0 / .18), 0 6px 14px rgb(0 0 0 / .22); padding-bottom: 6px; }
+.cal::before, .cal::after { content: ""; position: absolute; top: 4px; width: 7px; height: 7px; border-radius: 50%; background: rgb(0 0 0 / .28); }
+.cal::before { left: 18px; } .cal::after { right: 18px; }
+.cal-m { width: 100%; text-align: center; background: #D2A95A; color: #2A1D05; font-family: var(--serif); font-weight: 700; font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; padding: 12px 0 3px; }
+.cal-d { font-family: var(--display); font-size: 2.15rem; line-height: 1.05; padding-top: 2px; font-variant-numeric: tabular-nums; }
+.cal-w { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #940B29; }
 .sec-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .sec-h .muted { font-size: .85rem; }
 
@@ -129,12 +142,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .link { background: none; border: 0; color: var(--link); font-weight: 700; cursor: pointer; padding: 6px 4px; }
 
 /* Confirmados / espera */
-ol.conf { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: c; }
-ol.conf li { display: flex; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); }
-ol.conf li:last-child { border-bottom: 0; }
+.conf { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: c; }
+.conf li { display: flex; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.conf li:last-child { border-bottom: 0; }
+.conf.fx li::before { content: "★"; color: var(--ball); width: 1.8em; text-align: right; flex: none; }
+.conf.fx { padding-bottom: 6px; border-bottom: 2px dashed var(--line); }
 ol.conf li::before { counter-increment: c; content: counter(c); font-family: var(--display); color: var(--court); width: 1.8em; text-align: right; font-variant-numeric: tabular-nums; flex: none; }
 ol.conf.wait li::before { color: var(--warn); }
-ol.conf .nm { flex: 1; min-width: 0; }
+.conf .nm { flex: 1; min-width: 0; }
 .by { font-size: .78rem; color: var(--muted); }
 .log { display: grid; gap: 6px; font-size: .88rem; margin: 0; padding: 0; list-style: none; }
 .log li { display: flex; gap: 10px; }
@@ -185,8 +200,9 @@ ol.conf .nm { flex: 1; min-width: 0; }
 /* Admin */
 .adm-player { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .adm-player:last-child { border-bottom: 0; }
-.adm-player .ctrls { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 6px; }
-.adm-player select { min-height: 36px; padding: 4px 8px; }
+.adm-player .ctrls { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-player select { min-height: 36px; padding: 4px 8px; flex: 1 1 100px; width: auto; }
+.tally { max-width: 58%; }
 .seg { display: flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 3px; }
 .seg button { flex: 1; border: 0; background: transparent; padding: 8px; border-radius: 9px; font-weight: 600; cursor: pointer; color: var(--muted); min-height: 38px; }
 .seg button[aria-pressed=true] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
@@ -212,7 +228,7 @@ details summary { cursor: pointer; font-weight: 700; }
 .empty { text-align: center; padding: 18px 8px; color: var(--muted); }
 svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-@media (max-width: 380px) { .grid3 { grid-template-columns: 1fr 1fr; } .adm-player .ctrls { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 380px) { .grid3 { grid-template-columns: 1fr 1fr; } }
 </style>
 
 <div class="wrap">
@@ -278,17 +294,16 @@ const Backend = {
 
 function seedDemo() {
   const s = LG.initialState();
-  const t = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
-  Object.assign(s.settings, { groupName: 'Vôlei Gran Felicitá', title: 'Jogo de quinta (exemplo)', date: t, start: '19:00', end: '22:00', max: 18 });
-  const F = [['Ana', 4], ['Bia', 3], ['Carla', 2], ['Duda', 5], ['Fernanda', 3], ['Júlia', 2], ['Lara', 4], ['Marina', 3]];
-  const M = [['André', 4], ['Bruno', 3], ['Caio', 5], ['Diego', 2], ['Felipe', 4], ['Gustavo', 3], ['Henrique', 2], ['Igor', 3], ['João', 5], ['Lucas', 3], ['Mateus', 4], ['Rafael', 2], ['Tiago', 3], ['Vitor', 4]];
-  const add = (name, g, sk, guest) => { const id = 'd' + (s.seq++); s.players.push({ id, name, gender: g, skill: sk, paid: !guest && Math.random() < .55, guest: !!guest, photo: null, freq: guest ? 0 : Math.floor(Math.random() * 25) }); return id; };
+  const F = [['Sophia', 4], ['Ana', 4], ['Bia', 3], ['Carla', 2], ['Duda', 5], ['Fernanda', 3], ['Júlia', 2], ['Lara', 4], ['Marina', 3], ['Natália', 3], ['Paula', 2]];
+  const M = [['Fábio', 4], ['André', 4], ['Bruno', 3], ['Caio', 5], ['Diego', 2], ['Eduardo', 3], ['Felipe', 4], ['Gustavo', 3], ['Henrique', 2], ['Igor', 3], ['João', 5], ['Lucas', 3], ['Mateus', 4], ['Otávio', 3], ['Rafael', 2], ['Tiago', 3], ['Vitor', 4]];
+  const add = (name, g, sk, guest) => { const id = 'd' + (s.seq++); s.players.push({ id, name, gender: g, skill: sk, paid: !guest && Math.random() < .5, guest: !!guest, fixed: name === 'Sophia' || name === 'Fábio', photo: null, freq: guest ? 0 : Math.floor(Math.random() * 25) }); return id; };
   F.forEach(([n, k]) => add(n, 'F', k)); M.forEach(([n, k]) => add(n, 'M', k));
   const g1 = add('Pedro', 'M', 3, true), g2 = add('Sofia', 'F', 2, true);
-  const ids = s.players.filter(p => !p.guest).map(p => p.id);
-  const base = Date.now() - 6 * 36e5;
-  ids.slice(0, 16).forEach((id, i) => s.presences.push({ pid: id, by: id, ts: base + i * 6e5 }));
-  s.presences.push({ pid: g1, by: ids[3], ts: base + 17 * 6e5 }, { pid: g2, by: ids[0], ts: base + 18 * 6e5 });
+  LG.normalize(s, Date.now());
+  const ids = s.players.filter(p => !p.guest && !p.fixed).map(p => p.id);
+  const base = Math.min(Date.now() - 36e5, s.current ? s.current.openAt : Date.now());
+  ids.slice(0, 23).forEach((id, i) => s.presences.push({ pid: id, by: id, ts: base + i * 47e3 }));
+  s.presences.push({ pid: g1, by: ids[3], ts: base + 24 * 47e3 }, { pid: g2, by: ids[0], ts: base + 25 * 47e3 });
   s.presences.slice().reverse().slice(0, 6).forEach(p => s.log.push({ ts: p.ts, by: p.by, act: 'add', pid: p.pid }));
   return s;
 }
@@ -331,25 +346,29 @@ function avatar(p, lg) {
   if (p.photo) return `<img class="av${lg ? ' lg' : ''}" src="${h(p.photo)}" alt="">`;
   return `<span class="av${lg ? ' lg' : ''}" style="background:hsl(${hue(p.name)} 52% 44%)" aria-hidden="true">${h(p.name.trim()[0] || '?').toUpperCase()}</span>`;
 }
-function fmtDate(d) {
-  if (!d) return '';
-  try { return new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(d + 'T12:00:00Z')); } catch (e) { return d; }
-}
 const fmtTime = ts => new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).format(new Date(ts));
 const fmtDay = ts => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).format(new Date(ts));
-const whenText = () => { const st = S.settings; return [fmtDate(st.date), st.start && st.end ? `${st.start}–${st.end}` : st.start].filter(Boolean).join(' · '); };
+const fmtLong = ts => new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Sao_Paulo' }).format(new Date(ts));
+const spDate = ts => { const d = new Date(ts - 3 * 3600e3); return { d: d.getUTCDate(), m: d.getUTCMonth(), wd: d.getUTCDay() }; };
+const gameTitle = () => LG.gameTitle(S.current);
+const whenText = () => S.current ? `${fmtLong(S.current.startAt)} · ${S.current.start}–${S.current.end}` : '';
+const opensText = g => `${fmtLong(g.openAt)}, às ${fmtTime(g.openAt)}`;
 const locked = () => LG.lockInfo(S, now()).locked && !isAdmin;
 const canEdit = () => (!!me || isAdmin) && !locked();
+const canEditFixed = p => isAdmin || me === p.id;
 const opts = (list, val) => list.map(([v, t]) => `<option value="${h(v)}"${String(v) === String(val) ? ' selected' : ''}>${h(t)}</option>`).join('');
 const SKILLS = [[1, '1 · começando'], [2, '2 · básico'], [3, '3 · médio'], [4, '4 · bom'], [5, '5 · muito bom']];
 const GENDERS = [['F', 'Mulher'], ['M', 'Homem']];
+const DAY_OPTS = LG.DAYS.map((d, i) => [i, d]);
 
 function waLink(text) { return 'https://wa.me/?text=' + encodeURIComponent(text); }
 function listText() {
   const st = S.settings;
-  const lines = [`🏐 *${st.title}*`, whenText(), '', `*Confirmados ${D.confirmed.length}/${st.max}*`, ...D.confirmed.map((id, i) => `${i + 1}. ${nameOf(P(id))}${P(id).paid ? ' ✅' : ''}`)];
+  const lines = [`🏐 *${gameTitle()} — Gran Felicitá*`, whenText(), '', `*Confirmados ${D.confirmed.length}/${st.max}*`];
+  D.fixed.forEach(id => lines.push(`⭐ ${nameOf(P(id))} (comissão)`));
+  D.regular.forEach((id, i) => lines.push(`${i + 1}. ${nameOf(P(id))}`));
   if (D.waitlist.length) lines.push('', '*Lista de espera*', ...D.waitlist.map((id, i) => `${i + 1}. ${nameOf(P(id))}`));
-  if (mode === 'server') lines.push('', 'Marque presença: ' + location.origin + location.pathname);
+  if (mode === 'server') lines.push('', 'Check-in: ' + location.origin + location.pathname);
   return lines.join('\n');
 }
 
@@ -368,53 +387,63 @@ function render() {
 }
 
 function renderHeader() {
-  const st = S.settings, lk = LG.lockInfo(S, now());
-  const chip = lk.locked
-    ? `<span class="chip chip-lock">Lista fechada${lk.until ? ' até ' + fmtTime(lk.until) : ''}${isAdmin ? ' · você é admin' : ''}</span>`
-    : '<span class="chip chip-open">Lista aberta</span>';
+  const st = S.settings, g = S.current, lk = LG.lockInfo(S, now());
+  let chip;
+  if (lk.reason === 'notOpen') chip = `<span class="chip chip-lock">Check-in abre ${LG.DAYS_SHORT[spDate(g.openAt).wd]} às ${fmtTime(g.openAt)}</span>`;
+  else if (lk.locked) chip = `<span class="chip chip-lock">${lk.reason === 'noGame' ? 'Sem jogo marcado' : 'Lista fechada até ' + fmtTime(lk.until)}</span>`;
+  else chip = '<span class="chip chip-open">Check-in aberto</span>';
+  const cal = g ? (() => { const p = spDate(g.startAt); return `<div class="cal" aria-label="${h(fmtLong(g.startAt))}"><span class="cal-m">${LG.MONTHS[p.m]}</span><span class="cal-d">${p.d}</span><span class="cal-w">${LG.DAYS[p.wd]}</span></div>`; })() : '';
   return `
     <img class="swallow" src="${IMG.glide}" alt="">
     <div class="brand"><img src="${IMG.badge}" alt="Escudo Gran Felicitá">
       <div class="grow"><span class="eyebrow">${h(st.groupName)} <span class="stars" aria-hidden="true">★★</span></span><span>${chip}</span></div></div>
-    <div><h1>${h(st.title || 'Jogo')}</h1><div class="when">${h(whenText()) || '&nbsp;'}</div></div>
-    <div><span class="count">${D.confirmed.length}<small>/${st.max}</small></span><br><span class="count-label">confirmados${D.waitlist.length ? ` · ${D.waitlist.length} na espera` : ''}</span></div>`;
+    <div class="game">${cal}<div class="game-t"><h1>${h(gameTitle())}</h1><div class="when">${g ? `${g.start} às ${g.end}` : 'Peça pra um admin configurar os dias'}</div></div></div>
+    <div class="tally"><span class="count">${D.confirmed.length}<small>/${st.max}</small></span><br><span class="count-label">confirmados${D.fixed.length ? ` · ${D.fixed.length} da comissão` : ''}${D.waitlist.length ? ` · ${D.waitlist.length} na espera` : ''}</span></div>`;
 }
 
 function renderWho() {
   const p = me && P(me);
-  if (!p) return `<div class="card who"><div class="grow"><b>Quem é você?</b><div class="hint">Escolha seu nome pra marcar presença.</div></div><button class="btn btn-primary" data-act="whoami">Escolher</button></div>`;
-  const mine = S.presences.filter(x => x.by === me && x.pid !== me).length;
-  return `<div class="card who">${avatar(p)}<div class="grow"><b>${h(p.name)}</b><div class="hint">Você marcou ${mine} de ${S.settings.guestLimit} pessoas além de você</div></div><button class="link" data-act="whoami">Trocar</button></div>`;
+  if (!p) return `<div class="card who"><div class="grow"><b>Quem é você?</b><div class="hint">Escolha seu nome pra fazer check-in.</div></div><button class="btn btn-primary" data-act="whoami">Escolher</button></div>`;
+  const mine = S.presences.filter(x => x.by === me && x.pid !== me).length, lim = S.settings.guestLimit;
+  const sub = p.fixed ? 'Você tem vaga garantida da comissão' : lim ? `Você marcou ${mine} de ${lim} pessoa${lim > 1 ? 's' : ''} além de você` : 'Cada um faz o próprio check-in';
+  return `<div class="card who">${avatar(p)}<div class="grow"><b>${h(p.name)}</b><div class="hint">${sub}</div></div><button class="link" data-act="whoami">Trocar</button></div>`;
 }
 
 function renderLista() {
-  const demoNote = mode === 'demo' ? '<div class="demo"><b>Demonstração.</b> Os nomes são exemplos e tudo fica só neste aparelho. A senha de admin aqui é <b>admin</b>.</div>' : '';
+  const demoNote = mode === 'demo' ? '<div class="demo"><b>Demonstração.</b> Os nomes são exemplos e tudo fica só neste aparelho. A senha de admin aqui é <b>admin</b> (admin consegue mexer mesmo com o check-in fechado).</div>' : '';
   const members = S.players.filter(p => !p.guest).sort(byName);
   if (!S.players.length) return demoNote + `<div class="card empty"><img class="mascot" src="${IMG.front}" alt=""><h2>Ninguém cadastrado ainda</h2><p>Quem é admin cadastra os jogadores em <b>Mais → Admin</b>.</p></div>`;
-  const pos = {}; D.confirmed.forEach((id, i) => pos[id] = `<span class="pos">${i + 1}º</span>`); D.waitlist.forEach((id, i) => pos[id] = `<span class="pos wait">espera ${i + 1}</span>`);
+  const pos = {};
+  D.fixed.forEach(id => pos[id] = '<span class="pos fx">comissão</span>');
+  D.regular.forEach((id, i) => pos[id] = `<span class="pos">${i + 1}º</span>`);
+  D.waitlist.forEach((id, i) => pos[id] = `<span class="pos wait">espera ${i + 1}</span>`);
   const edit = canEdit();
   const row = p => {
-    const on = !!pos[p.id];
-    return `<label class="row${on ? ' on' : ''}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${edit ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${p.paid ? '<span class="paid">pago</span>' : ''}${pos[p.id] || ''}</label>`;
+    const on = !!pos[p.id], can = p.fixed ? canEditFixed(p) : edit;
+    return `<label class="row${on ? ' on' : ''}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${can ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${p.paid ? '<span class="paid">pago</span>' : ''}${pos[p.id] || (p.fixed ? '<span class="pos wait">não vai</span>' : '')}</label>`;
   };
   const section = (title, list) => list.length ? `<div class="card"><div class="sec-h"><h2>${title}</h2><span class="muted">${list.filter(p => pos[p.id]).length} de ${list.length}</span></div><div class="list">${list.map(row).join('')}</div></div>` : '';
   const guests = S.players.filter(p => p.guest).sort((a, b) => (pos[b.id] ? 1 : 0) - (pos[a.id] ? 1 : 0) || byName(a, b));
-  const lockMsg = locked() ? `<div class="notice">A lista está fechada agora. Só quem é admin consegue mexer.</div>` : '';
-  const conf = D.ordered.slice(0, S.settings.max);
-  const li = x => { const p = P(x.pid); const by = x.by && x.by !== x.pid && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} ${p.paid ? '<span class="paid">pago</span>' : ''}</span>${by}</li>`; };
+  const lk = LG.lockInfo(S, now());
+  let lockMsg = '';
+  if (lk.reason === 'notOpen') lockMsg = `<div class="card opens"><img class="mascot sm" src="${IMG.front}" alt=""><div><b>O check-in abre ${h(opensText(S.current))}</b><div class="hint">${isAdmin ? 'Você é admin e já consegue mexer na lista.' : 'Volte nesse horário. Quem marcar primeiro garante a vaga.'}</div></div></div>`;
+  else if (lk.locked && !isAdmin) lockMsg = `<div class="notice">A lista está fechada agora. Só quem é admin consegue mexer.</div>`;
+  const prio = S.settings.paidPriority;
+  const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} ${p.paid ? '<span class="paid">pago</span>' : ''}</span>${by || t}</li>`; };
   return `${demoNote}${renderWho()}${lockMsg}
-    <p class="hint" style="padding:0 4px">Marque quem vai jogar. Quem tem <span class="paid">pago</span> contribuiu com a vaquinha e passa na frente na lista. Tirar alguém não tem limite.</p>
+    <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir.</p>
     ${section('Mulheres', members.filter(p => p.gender === 'F'))}
     ${section('Homens', members.filter(p => p.gender !== 'F'))}
     ${section('Convidados', guests)}
-    ${edit ? `<div class="card"><h2>Trazer um convidado</h2>
+    ${edit && S.settings.guestLimit ? `<div class="card"><h2>Trazer um convidado</h2>
       <div class="field"><label for="g-name">Nome</label><input type="text" id="g-name" maxlength="40" autocomplete="off" placeholder="Nome do convidado"></div>
       <div class="grid2"><div class="field"><label for="g-gender">Gênero</label><select id="g-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
       <div class="field"><label for="g-skill">Nível</label><select id="g-skill">${opts(SKILLS, 3)}</select></div></div>
       <button class="btn btn-primary" data-act="addGuest">Adicionar convidado</button></div>` : ''}
     <div class="card"><div class="sec-h"><h2>Confirmados</h2><span class="muted">${D.confirmed.length}/${S.settings.max}</span></div>
-      ${conf.length ? `<ol class="conf">${conf.map(li).join('')}</ol>` : '<p class="hint">Ninguém confirmou ainda.</p>'}
-      ${D.waitlist.length ? `<h3 style="font-size:1rem;color:var(--warn)">Lista de espera</h3><ol class="conf wait">${D.ordered.slice(S.settings.max).map(li).join('')}</ol>` : ''}
+      ${D.fixed.length ? `<ul class="conf fx">${D.fixed.map(id => `<li>${avatar(P(id))}<span class="nm">${h(nameOf(P(id)))}</span><span class="by">vaga garantida</span></li>`).join('')}</ul>` : ''}
+      ${D.regular.length ? `<ol class="conf">${D.regular.map(li).join('')}</ol>` : '<p class="hint">Ninguém fez check-in ainda.</p>'}
+      ${D.waitlist.length ? `<h3 style="font-size:1rem;color:var(--warn)">Lista de espera</h3><ol class="conf wait">${D.waitlist.map(li).join('')}</ol>` : ''}
       <a class="btn btn-wa" href="${h(waLink(listText()))}" target="_blank" rel="noopener">${ICON.wa}Mandar lista no WhatsApp</a>
     </div>
     ${S.log.length ? `<div class="card"><h2>O que aconteceu</h2><ul class="log">${S.log.slice(0, 20).map(l => {
@@ -456,7 +485,7 @@ function renderTimes() {
     ${teamsHtml}`;
 }
 function teamsText() {
-  return [`🏐 *Times — ${S.settings.title}*`, ...S.teams.list.map((t, i) => `\n*Time ${i + 1}*\n` + t.map(P).filter(Boolean).map(p => '• ' + nameOf(p) + ((S.roles[p.id] || {}).setter ? ' (levanta)' : '')).join('\n'))].join('\n');
+  return [`🏐 *Times — ${gameTitle()}*`, ...S.teams.list.map((t, i) => `\n*Time ${i + 1}*\n` + t.map(P).filter(Boolean).map(p => '• ' + nameOf(p) + ((S.roles[p.id] || {}).setter ? ' (levanta)' : '')).join('\n'))].join('\n');
 }
 
 let score = store.get('placar', { a: 0, b: 0, na: 'Time 1', nb: 'Time 2', sa: 0, sb: 0 });
@@ -476,7 +505,7 @@ function renderFreq() {
   const list = S.players.filter(p => !p.guest || p.freq > 0).slice().sort((a, b) => (b.freq || 0) - (a.freq || 0) || byName(a, b));
   const max = Math.max(1, ...list.map(p => p.freq || 0));
   return `<div class="card"><h2>Quem mais veio</h2>
-    <p class="hint">Cada jogo encerrado pelo admin soma 1 pra quem estava confirmado.</p>
+    <p class="hint">Quando o jogo acaba, soma 1 pra quem estava confirmado.</p>
     ${list.length ? `<div class="freq">${list.map(p => `<div class="fbar"><span class="nm">${h(nameOf(p))}</span><span class="track"><span class="fill" style="width:${Math.round((p.freq || 0) / max * 100)}%;display:block"></span></span><b>${p.freq || 0}</b></div>`).join('')}</div>` : '<p class="hint">Ninguém cadastrado ainda.</p>'}
   </div>`;
 }
@@ -484,7 +513,8 @@ function renderFreq() {
 function renderMais() {
   const p = me && P(me);
   const theme = store.get('theme', 'auto');
-  const st = S.settings, al = st.autoLock || {};
+  const st = S.settings;
+  const sched = st.schedule || [];
   let html = '';
   if (p) html += `<div class="card"><h2>Sua foto</h2><div class="who">${avatar(p, true)}<div class="grow btns">
       <label class="btn btn-ghost btn-sm" for="photo-in">Escolher foto</label><input type="file" id="photo-in" accept="image/*" hidden>
@@ -495,11 +525,13 @@ function renderMais() {
     <div class="card"><h2>Tema</h2><div class="seg" role="group" aria-label="Tema">
       ${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Escuro']].map(([v, t]) => `<button data-theme-set="${v}" aria-pressed="${theme === v}">${t}</button>`).join('')}</div></div>
     <div class="card"><details><summary>Como a lista funciona</summary><ul class="rules" style="margin-top:10px">
-      <li>Cada pessoa marca a si mesma e até ${st.guestLimit} outras pessoas (incluindo convidados). Tirar não tem limite.</li>
-      <li>Quem pagou a vaquinha passa na frente; depois vale a ordem de chegada.</li>
-      <li>Entram ${st.max} confirmados; o resto fica na lista de espera e sobe sozinho se alguém sair.</li>
+      ${sched.map(g => `<li><b>${LG.DAYS[g.day]}</b>, das ${h(g.start)} às ${h(g.end)}. Check-in abre ${LG.DAYS[g.openDay].toLowerCase()} às ${h(g.openTime)}.</li>`).join('')}
+      <li>São ${st.max} vagas${D.fixed.length ? `: ${D.fixed.length} da comissão, que já têm vaga garantida, e ${D.open} por ordem de check-in` : ' por ordem de check-in'}.</li>
+      ${st.paidPriority ? '<li>Quem pagou a vaquinha passa na frente de quem não pagou.</li>' : ''}
+      <li>Passou das vagas, entra na lista de espera, que sobe sozinha quando alguém desiste.</li>
+      <li>${st.guestLimit ? `Cada pessoa faz o próprio check-in e pode marcar até ${st.guestLimit} outra${st.guestLimit > 1 ? 's' : ''} (incluindo convidados).` : 'Cada pessoa faz o próprio check-in.'} Tirar não tem limite.</li>
+      <li>Quando o jogo acaba, a lista zera sozinha e já mostra o próximo jogo. Quem estava confirmado ganha +1 na frequência.</li>
       <li>O sorteio equilibra homens, mulheres, levantadores e nível.</li>
-      ${al.enabled ? `<li>Toda ${LG.DAYS[al.day].toLowerCase()}, das ${h(al.from)} às ${h(al.to)}, a lista fica fechada.</li>` : ''}
     </ul></details></div>`;
 
   if (!isAdmin) {
@@ -507,44 +539,50 @@ function renderMais() {
       <button class="btn btn-ghost" data-act="login">Entrar como admin</button></div>`;
     return html;
   }
-  const players = S.players.slice().sort((a, b) => (a.guest ? 1 : 0) - (b.guest ? 1 : 0) || byName(a, b));
+  const players = S.players.slice().sort((a, b) => (a.guest ? 1 : 0) - (b.guest ? 1 : 0) || (b.fixed ? 1 : 0) - (a.fixed ? 1 : 0) || byName(a, b));
   const lk = LG.lockInfo(S, now());
-  html += `<div class="card"><div class="sec-h"><h2>Admin · Jogo</h2><button class="link" data-act="logout">Sair do admin</button></div>
+  html += `<div class="card"><div class="sec-h"><h2>Admin · Dias de jogo</h2><button class="link" data-act="logout">Sair do admin</button></div>
+      <p class="hint">O app sempre mostra o próximo jogo e troca sozinho quando um termina.</p>
+      ${sched.map((g, i) => `<div class="sched" data-sched="${i}">
+        <div class="grid3"><div class="field"><label for="sc-day-${i}">Jogo</label><select id="sc-day-${i}">${opts(DAY_OPTS, g.day)}</select></div>
+          <div class="field"><label for="sc-start-${i}">Começa</label><input type="time" id="sc-start-${i}" value="${h(g.start)}"></div>
+          <div class="field"><label for="sc-end-${i}">Termina</label><input type="time" id="sc-end-${i}" value="${h(g.end)}"></div></div>
+        <div class="grid3"><div class="field"><label for="sc-oday-${i}">Check-in abre</label><select id="sc-oday-${i}">${opts(DAY_OPTS, g.openDay)}</select></div>
+          <div class="field"><label for="sc-otime-${i}">Às</label><input type="time" id="sc-otime-${i}" value="${h(g.openTime)}"></div>
+          <div class="btns" style="align-items:end"><button class="btn btn-ghost btn-sm" data-schedrm="${i}">Remover</button></div></div></div>`).join('')}
+      <div class="btns"><button class="btn btn-ghost" data-act="add-sched">Adicionar dia</button><button class="btn btn-primary" data-act="save-sched">Salvar dias</button></div></div>
+
+    <div class="card"><h2>Admin · Vagas</h2>
       <div class="field"><label for="s-group">Nome do grupo</label><input type="text" id="s-group" value="${h(st.groupName)}"></div>
-      <div class="field"><label for="s-title">Título do jogo</label><input type="text" id="s-title" value="${h(st.title)}"></div>
-      <div class="grid3"><div class="field"><label for="s-date">Data</label><input type="date" id="s-date" value="${h(st.date)}"></div>
-        <div class="field"><label for="s-start">Começa</label><input type="time" id="s-start" value="${h(st.start)}"></div>
-        <div class="field"><label for="s-end">Termina</label><input type="time" id="s-end" value="${h(st.end)}"></div></div>
-      <div class="grid3"><div class="field"><label for="s-max">Vagas</label><input type="number" id="s-max" min="4" max="60" value="${st.max}"></div>
+      <div class="grid3"><div class="field"><label for="s-max">Vagas no total</label><input type="number" id="s-max" min="4" max="60" value="${st.max}"></div>
         <div class="field"><label for="s-per">Por time</label><input type="number" id="s-per" min="2" max="9" value="${st.perTeam}"></div>
         <div class="field"><label for="s-limit">Pode marcar</label><input type="number" id="s-limit" min="0" max="10" value="${st.guestLimit}"></div></div>
-      <button class="btn btn-primary" data-act="save-settings">Salvar jogo</button></div>
+      <p class="hint">Com ${D.fixed.length} da comissão, sobram <b>${Math.max(0, st.max - D.fixed.length)}</b> vagas pro check-in. "Pode marcar" é quantas pessoas cada um consegue marcar além de si.</p>
+      <label class="check"><input type="checkbox" id="s-prio"${st.paidPriority ? ' checked' : ''}> Quem pagou a vaquinha passa na frente</label>
+      <button class="btn btn-primary" data-act="save-settings">Salvar</button></div>
 
     <div class="card"><h2>Admin · Jogadores</h2>
       <div class="field"><label for="np-name">Novo jogador</label><input type="text" id="np-name" maxlength="40" placeholder="Nome"></div>
       <div class="grid2"><div class="field"><label for="np-gender">Gênero</label><select id="np-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
         <div class="field"><label for="np-skill">Nível</label><select id="np-skill">${opts(SKILLS, 3)}</select></div></div>
       <label class="check"><input type="checkbox" id="np-paid"> Pagou a vaquinha</label>
+      <label class="check"><input type="checkbox" id="np-fixed"> Comissão (vaga garantida)</label>
       <button class="btn btn-primary" data-act="add-player">Cadastrar</button>
       <div>${players.map(q => `<div class="adm-player">${avatar(q)}<b>${h(nameOf(q))}</b>
         <div class="ctrls"><select data-edit="${q.id}" data-field="gender" aria-label="Gênero de ${h(q.name)}">${opts(GENDERS, q.gender)}</select>
           <select data-edit="${q.id}" data-field="skill" aria-label="Nível de ${h(q.name)}">${opts(SKILLS, q.skill)}</select>
           <button class="tog setter" aria-pressed="${!!q.paid}" data-paid="${q.id}">pago</button>
+          ${q.guest ? '<span></span>' : `<button class="tog setter" aria-pressed="${!!q.fixed}" data-fixed="${q.id}">comissão</button>`}
           <button class="btn btn-danger btn-sm" data-del="${q.id}" data-confirm>Excluir</button></div></div>`).join('')}</div></div>
 
     <div class="card"><h2>Admin · Fechar a lista</h2>
-      <p class="hint">${lk.locked ? (lk.reason === 'manual' ? `Fechada até ${fmtDay(lk.until)}.` : 'Fechada pelo horário automático.') : 'A lista está aberta.'}</p>
+      <p class="hint">${lk.reason === 'manual' ? `Fechada até ${fmtDay(lk.until)}.` : lk.reason === 'notOpen' ? `O check-in abre ${h(opensText(S.current))}.` : 'O check-in está aberto.'} Use isto só se precisar travar a lista fora do horário normal.</p>
       <div class="grid2"><div class="field"><label for="lk-min">Fechar por (minutos)</label><input type="number" id="lk-min" min="1" value="60"></div>
-        <div class="btns" style="align-items:end"><button class="btn btn-ghost" data-act="lock">Fechar</button><button class="btn btn-ghost" data-act="unlock"${st.manualLockUntil > now() ? '' : ' disabled'}>Reabrir</button></div></div>
-      <label class="check"><input type="checkbox" id="al-on"${al.enabled ? ' checked' : ''}> Fechar toda semana num horário</label>
-      <div class="grid3"><div class="field"><label for="al-day">Dia</label><select id="al-day">${opts(LG.DAYS.map((d, i) => [i, d]), al.day)}</select></div>
-        <div class="field"><label for="al-from">Das</label><input type="time" id="al-from" value="${h(al.from)}"></div>
-        <div class="field"><label for="al-to">Até</label><input type="time" id="al-to" value="${h(al.to)}"></div></div>
-      <button class="btn btn-ghost" data-act="save-autolock">Salvar horário</button></div>
+        <div class="btns" style="align-items:end"><button class="btn btn-ghost" data-act="lock">Fechar</button><button class="btn btn-ghost" data-act="unlock"${st.manualLockUntil > now() ? '' : ' disabled'}>Reabrir</button></div></div></div>
 
     <div class="card"><h2>Admin · Fim de jogo</h2>
-      <p class="hint"><b>Encerrar jogo</b> soma 1 na frequência de quem estava confirmado e limpa a lista, os papéis, os times e o histórico.</p>
-      <button class="btn btn-danger" data-act="resetPresences" data-confirm>Encerrar jogo e limpar lista</button>
+      <p class="hint">O jogo encerra sozinho no horário de fim${S.current ? ` (${S.current.end})` : ''}. Use o botão só se quiser encerrar antes: ele soma 1 na frequência de quem estava confirmado e limpa a lista.</p>
+      <button class="btn btn-danger" data-act="resetPresences" data-confirm>Encerrar agora e limpar lista</button>
       <div class="btns"><button class="btn btn-danger" data-act="resetPaid" data-confirm>Zerar pagamentos</button><button class="btn btn-danger" data-act="resetFreq" data-confirm>Zerar frequência</button></div></div>
 
     <div class="card"><h2>Admin · Sugestões recebidas</h2>
@@ -568,6 +606,7 @@ function closeSheet() { $('#sheet').hidden = true; $('#sheet').innerHTML = ''; }
 let toastTimer;
 function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, err ? 4000 : 2200); }
 const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+const readSched = () => [...document.querySelectorAll('[data-sched]')].map(r => { const i = r.dataset.sched; return { day: Number(val('sc-day-' + i)), start: val('sc-start-' + i), end: val('sc-end-' + i), openDay: Number(val('sc-oday-' + i)), openTime: val('sc-otime-' + i) }; });
 
 function armed(btn) {
   if (!btn.hasAttribute('data-confirm') || btn.dataset.armed) return true;
@@ -584,6 +623,8 @@ document.addEventListener('click', async e => {
   if (t.dataset.pick) { me = t.dataset.pick; store.set('me', me); closeSheet(); render(); toast('Oi, ' + P(me).name + '!'); return; }
   if (t.dataset.role) return act({ type: 'role', pid: t.dataset.pid, role: t.dataset.role });
   if (t.dataset.paid) return act({ type: 'togglePaid', id: t.dataset.paid });
+  if (t.dataset.fixed) return act({ type: 'toggleFixed', id: t.dataset.fixed });
+  if (t.dataset.schedrm) return act({ type: 'schedule', schedule: readSched().filter((g, i) => i !== Number(t.dataset.schedrm)) }, 'Dia removido.');
   if (t.dataset.del) return act({ type: 'deletePlayer', id: t.dataset.del }, 'Jogador excluído.');
   if (t.dataset.sugdel) return act({ type: 'deleteSuggestion', id: t.dataset.sugdel });
   if (t.dataset.themeSet) { store.set('theme', t.dataset.themeSet); applyTheme(); render(); return; }
@@ -598,11 +639,12 @@ document.addEventListener('click', async e => {
     case 'sug-sign': return act({ type: 'suggest', text: val('sug-text'), anon: false }, 'Sugestão enviada. Obrigado!', ['sug-text']);
     case 'login': return act({ type: 'login', password: val('adm-pw') }, 'Você entrou como admin.', ['adm-pw']);
     case 'logout': token = null; store.set('token', null); isAdmin = false; await poll(); render(); return;
-    case 'save-settings': return act({ type: 'settings', groupName: val('s-group'), title: val('s-title'), date: val('s-date'), start: val('s-start'), end: val('s-end'), max: val('s-max'), perTeam: val('s-per'), guestLimit: val('s-limit') }, 'Jogo salvo.');
-    case 'add-player': return act({ type: 'savePlayer', name: val('np-name'), gender: val('np-gender'), skill: val('np-skill'), paid: document.getElementById('np-paid').checked }, 'Jogador cadastrado.', ['np-name']);
+    case 'save-settings': return act({ type: 'settings', groupName: val('s-group'), max: val('s-max'), perTeam: val('s-per'), guestLimit: val('s-limit'), paidPriority: document.getElementById('s-prio').checked }, 'Salvo.');
+    case 'save-sched': return act({ type: 'schedule', schedule: readSched() }, 'Dias salvos.');
+    case 'add-sched': { const list = readSched(); const used = new Set(list.map(g => g.day)); const day = [1, 2, 3, 4, 5, 6, 0].find(d => !used.has(d)); if (day === undefined) return; list.push({ day, start: '19:00', end: '22:00', openDay: (day + 6) % 7, openTime: '12:00' }); return act({ type: 'schedule', schedule: list }, 'Dia adicionado.'); }
+    case 'add-player': return act({ type: 'savePlayer', name: val('np-name'), gender: val('np-gender'), skill: val('np-skill'), paid: document.getElementById('np-paid').checked, fixed: document.getElementById('np-fixed').checked }, 'Jogador cadastrado.', ['np-name']);
     case 'lock': return act({ type: 'lockNow', minutes: val('lk-min') }, 'Lista fechada.');
     case 'unlock': return act({ type: 'unlock' }, 'Lista reaberta.');
-    case 'save-autolock': return act({ type: 'autoLock', enabled: document.getElementById('al-on').checked, day: val('al-day'), from: val('al-from'), to: val('al-to') }, 'Horário salvo.');
     case 'resetPresences': return act({ type: 'resetPresences' }, 'Jogo encerrado. Frequência atualizada.');
     case 'resetPaid': return act({ type: 'resetPaid' }, 'Pagamentos zerados.');
     case 'resetFreq': return act({ type: 'resetFreq' }, 'Frequência zerada.');

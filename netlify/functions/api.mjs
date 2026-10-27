@@ -12,8 +12,8 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
 
 async function load(store) {
   const r = await store.getWithMetadata(KEY, { type: 'json' });
-  if (!r || !r.data) return { state: L.initialState(), etag: null };
-  return { state: Object.assign(L.initialState(), r.data), etag: r.etag || null };
+  if (!r || !r.data) return { state: L.normalize(L.initialState(), Date.now()), etag: null };
+  return { state: L.normalize(r.data, Date.now()), etag: r.etag || null };
 }
 
 export default async (req) => {
@@ -33,7 +33,7 @@ export default async (req) => {
     const { state } = await load(store);
     const d = L.derive(state), pm = Object.fromEntries(state.players.map(p => [p.id, p]));
     const nm = id => pm[id].name + (pm[id].guest ? ' (C)' : '');
-    const lines = [`🏐 ${state.settings.title} — ${d.confirmed.length}/${state.settings.max}`, ...d.confirmed.map((id, i) => `${i + 1}. ${nm(id)}`)];
+    const lines = [`🏐 ${L.gameTitle(state.current)} (${L.gameWhen(state.current)}) — ${d.confirmed.length}/${state.settings.max}`, ...d.confirmed.map((id, i) => `${i + 1}. ${nm(id)}`)];
     if (d.waitlist.length) lines.push('', 'Espera:', ...d.waitlist.map((id, i) => `${i + 1}. ${nm(id)}`));
     return new Response(lines.join('\n'), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
   }

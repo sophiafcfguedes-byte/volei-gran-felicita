@@ -1,23 +1,34 @@
-/* Regras do app do vôlei — usado pelo servidor (Node) e pelo navegador (modo demo). */
+/* Regras do app Vôlei Gran Felicitá — usado pelo servidor (Netlify/Node) e pelo navegador (modo demo). */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.VoleiLogic = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   const DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+  const DAYS_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const SETTINGS_VERSION = 2;
   const ADMIN_ONLY = new Set([
-    'savePlayer', 'deletePlayer', 'togglePaid', 'settings', 'lockNow', 'unlock',
-    'autoLock', 'resetPresences', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'settings', 'schedule', 'lockNow', 'unlock',
+    'resetPresences', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
+
+  function defaultSettings() {
+    return {
+      v: SETTINGS_VERSION,
+      groupName: 'Vôlei Gran Felicitá',
+      max: 24, perTeam: 6, guestLimit: 3, paidPriority: false,
+      schedule: [
+        { day: 1, start: '19:00', end: '22:00', openDay: 0, openTime: '12:00' },
+        { day: 4, start: '19:00', end: '22:00', openDay: 3, openTime: '12:00' }
+      ],
+      manualLockUntil: 0
+    };
+  }
 
   function initialState() {
     return {
-      settings: {
-        groupName: 'Vôlei Gran Felicitá', title: 'Jogo da semana', date: '', start: '19:00', end: '22:00',
-        max: 18, perTeam: 6, guestLimit: 3,
-        autoLock: { enabled: false, day: 5, from: '07:30', to: '12:00' },
-        manualLockUntil: 0
-      },
-      players: [], presences: [], roles: {}, teams: null, log: [], suggestions: [], seq: 1
+      settings: defaultSettings(), current: null,
+      players: [], presences: [], out: [], roles: {}, teams: null, log: [], suggestions: [], history: [], seq: 1
     };
   }
 
@@ -26,40 +37,95 @@
     return (prefix || 'p') + s.seq.toString(36) + Math.random().toString(36).slice(2, 6);
   }
 
+  /* ---------- Datas no horário de Brasília (UTC−3, sem horário de verão) ---------- */
+  const SP = -3 * 3600e3;
   const toMins = t => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+  const spParts = ts => { const d = new Date(ts + SP); return { y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate(), wd: d.getUTCDay() }; };
+  const spTs = (y, m, d, hhmm) => Date.UTC(y, m, d, 0, toMins(hhmm)) - SP;
+  const isoDate = (y, m, d) => new Date(Date.UTC(y, m, d)).toISOString().slice(0, 10);
 
-  function spNow(now) {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Sao_Paulo', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false
-    }).formatToParts(new Date(now));
-    const get = t => (parts.find(p => p.type === t) || {}).value;
-    const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(get('weekday'));
-    return { day, mins: (Number(get('hour')) % 24) * 60 + Number(get('minute')) };
+  /* O próximo jogo que ainda não terminou, com o horário em que o check-in abre. */
+  function activeGame(s, now) {
+    const sched = (s.settings.schedule || []).filter(g => g && g.day >= 0 && g.day <= 6);
+    const t = spParts(now);
+    let best = null;
+    for (let k = 0; k <= 7; k++) {
+      const base = new Date(Date.UTC(t.y, t.m, t.d + k));
+      const y = base.getUTCFullYear(), m = base.getUTCMonth(), d = base.getUTCDate(), wd = base.getUTCDay();
+      for (const g of sched) {
+        if (g.day !== wd) continue;
+        const startAt = spTs(y, m, d, g.start), endAt = spTs(y, m, d, g.end);
+        if (endAt <= now) continue;
+        const before = ((g.day - g.openDay) % 7 + 7) % 7;
+        const openAt = spTs(y, m, d - before, g.openTime);
+        const cand = { id: isoDate(y, m, d), day: wd, start: g.start, end: g.end, startAt, endAt, openAt, openDay: g.openDay, openTime: g.openTime };
+        if (!best || cand.startAt < best.startAt) best = cand;
+      }
+      if (best) break;
+    }
+    return best;
+  }
+
+  function gameTitle(g) { return g ? `Vôlei de ${DAYS[g.day].toLowerCase()}` : 'Sem jogo marcado'; }
+  function gameWhen(g) {
+    if (!g) return '';
+    const p = spParts(g.startAt);
+    return `${DAYS_SHORT[g.day]}, ${p.d} de ${MONTHS[p.m]} · ${g.start}–${g.end}`;
+  }
+
+  /* Ajusta estados antigos e vira o jogo quando o anterior já acabou.
+     Quem estava confirmado no jogo que acabou ganha +1 na frequência. */
+  function normalize(s, now) {
+    const init = initialState();
+    for (const k of Object.keys(init)) if (s[k] === undefined) s[k] = init[k];
+    if (!s.settings || s.settings.v !== SETTINGS_VERSION) {
+      const old = s.settings || {};
+      s.settings = Object.assign(defaultSettings(), { groupName: old.groupName || 'Vôlei Gran Felicitá', perTeam: old.perTeam || 6, guestLimit: old.guestLimit != null ? old.guestLimit : 3 });
+    }
+    const g = activeGame(s, now);
+    const id = g ? g.id : null;
+    if (!s.current || s.current.id !== id) {
+      if (s.current && (s.presences.length || s.players.some(p => p.fixed))) finishGame(s);
+      s.presences = []; s.out = []; s.roles = {}; s.teams = null; s.log = [];
+    }
+    s.current = g;
+    return s;
+  }
+
+  function finishGame(s) {
+    const d = derive(s);
+    const pm = playerMap(s);
+    d.confirmed.forEach(id => { if (pm[id]) pm[id].freq = (pm[id].freq || 0) + 1; });
+    s.history.unshift({ id: s.current ? s.current.id : null, confirmed: d.confirmed });
+    if (s.history.length > 60) s.history.length = 60;
   }
 
   function lockInfo(s, now) {
-    const st = s.settings;
+    const st = s.settings, g = s.current;
+    if (!g) return { locked: true, reason: 'noGame' };
     if (st.manualLockUntil && st.manualLockUntil > now) return { locked: true, reason: 'manual', until: st.manualLockUntil };
-    const a = st.autoLock;
-    if (a && a.enabled) {
-      const t = spNow(now);
-      if (t.day === Number(a.day) && t.mins >= toMins(a.from) && t.mins < toMins(a.to)) return { locked: true, reason: 'auto' };
-    }
+    if (now < g.openAt) return { locked: true, reason: 'notOpen', opensAt: g.openAt };
     return { locked: false };
   }
 
   const playerMap = s => Object.fromEntries(s.players.map(p => [p.id, p]));
 
-  /* Quem pagou a vaquinha vem primeiro; depois, por ordem de chegada. */
+  /* Comissão (vaga garantida) entra primeiro; o resto por ordem de check-in
+     (ou quem pagou a vaquinha primeiro, se essa opção estiver ligada). */
   function derive(s) {
     const pm = playerMap(s);
-    const ordered = s.presences.filter(x => pm[x.pid]).slice()
-      .sort((a, b) => (pm[b.pid].paid ? 1 : 0) - (pm[a.pid].paid ? 1 : 0) || a.ts - b.ts);
-    const max = Number(s.settings.max) || 18;
+    const outSet = new Set(s.out || []);
+    const fixed = s.players.filter(p => p.fixed && !outSet.has(p.id)).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(p => p.id);
+    const prio = !!s.settings.paidPriority;
+    const ordered = s.presences.filter(x => pm[x.pid] && !pm[x.pid].fixed).slice()
+      .sort((a, b) => (prio ? (pm[b.pid].paid ? 1 : 0) - (pm[a.pid].paid ? 1 : 0) : 0) || a.ts - b.ts);
+    const max = Number(s.settings.max) || 24;
+    const open = Math.max(0, max - fixed.length);
     return {
-      ordered,
-      confirmed: ordered.slice(0, max).map(x => x.pid),
-      waitlist: ordered.slice(max).map(x => x.pid)
+      fixed, ordered, open,
+      regular: ordered.slice(0, open).map(x => x.pid),
+      confirmed: fixed.concat(ordered.slice(0, open).map(x => x.pid)),
+      waitlist: ordered.slice(open).map(x => x.pid)
     };
   }
 
@@ -112,37 +178,51 @@
 
   const cleanName = v => String(v || '').replace(/\s+/g, ' ').trim().slice(0, 40);
   const clampSkill = v => Math.min(5, Math.max(1, Math.round(Number(v) || 3)));
+  const cleanTime = v => /^\d{2}:\d{2}$/.test(String(v)) ? String(v) : null;
 
   function apply(s, a, ctx) {
     const now = ctx.now, admin = !!ctx.isAdmin;
+    normalize(s, now);
     const fail = error => ({ ok: false, error });
     const ok = { ok: true };
     const pm = playerMap(s);
     const me = a.by ? pm[a.by] : null;
-    const locked = lockInfo(s, now).locked && !admin;
+    const lk = lockInfo(s, now);
+    const lockMsg = lk.reason === 'notOpen' ? 'O check-in ainda não abriu.' : lk.reason === 'noGame' ? 'Não tem jogo marcado.' : 'A lista está fechada agora.';
+    const locked = lk.locked && !admin;
     const log = (act, pid) => {
       s.log.unshift({ ts: now, by: me ? me.id : null, act, pid: pid || null });
       if (s.log.length > 300) s.log.length = 300;
     };
     const addedByMe = () => s.presences.filter(x => x.by === a.by && x.pid !== a.by).length;
-    const limit = Number(s.settings.guestLimit) || 3;
+    const limit = Number(s.settings.guestLimit) || 0;
 
     if (ADMIN_ONLY.has(a.type) && !admin) return fail('Só quem é admin pode fazer isso.');
     if (!ADMIN_ONLY.has(a.type) && !me && !admin && a.type !== 'suggest') return fail('Escolha quem você é antes (no topo da lista).');
 
     switch (a.type) {
       case 'join': {
-        if (locked) return fail('A lista está fechada agora.');
         const p = pm[a.pid];
         if (!p) return fail('Jogador não encontrado.');
+        if (p.fixed) {
+          if (!admin && a.pid !== a.by) return fail('Só a própria pessoa ou um admin mexe na vaga da comissão.');
+          s.out = (s.out || []).filter(id => id !== p.id); log('add', p.id); return ok;
+        }
+        if (locked) return fail(lockMsg);
         if (s.presences.some(x => x.pid === p.id)) return ok;
-        if (!admin && p.id !== a.by && addedByMe() >= limit) return fail(`Você já marcou ${limit} pessoas além de você. Esse é o limite.`);
+        if (!admin && p.id !== a.by && addedByMe() >= limit) return fail(limit ? `Você já marcou ${limit} pessoa${limit > 1 ? 's' : ''} além de você. Esse é o limite.` : 'Cada um só pode marcar a si mesmo.');
         s.presences.push({ pid: p.id, by: me ? me.id : null, ts: now });
         log('add', p.id);
         return ok;
       }
       case 'leave': {
-        if (locked) return fail('A lista está fechada agora.');
+        const p = pm[a.pid];
+        if (p && p.fixed) {
+          if (!admin && a.pid !== a.by) return fail('Só a própria pessoa ou um admin mexe na vaga da comissão.');
+          if (!s.out.includes(p.id)) s.out.push(p.id);
+          delete s.roles[a.pid]; log('remove', p.id); return ok;
+        }
+        if (locked && lk.reason !== 'notOpen') return fail(lockMsg);
         const before = s.presences.length;
         s.presences = s.presences.filter(x => x.pid !== a.pid);
         if (s.presences.length === before) return ok;
@@ -151,15 +231,15 @@
         return ok;
       }
       case 'addGuest': {
-        if (locked) return fail('A lista está fechada agora.');
+        if (locked) return fail(lockMsg);
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva o nome do convidado.');
         if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero do convidado.');
-        if (!admin && addedByMe() >= limit) return fail(`Você já marcou ${limit} pessoas além de você. Esse é o limite.`);
+        if (!admin && addedByMe() >= limit) return fail(limit ? `Você já marcou ${limit} pessoa${limit > 1 ? 's' : ''} além de você. Esse é o limite.` : 'Cada um só pode marcar a si mesmo.');
         let p = s.players.find(x => x.name.toLowerCase() === name.toLowerCase());
         if (p && !p.guest) return fail(`${p.name} já está no grupo. Marque na lista.`);
         if (!p) {
-          p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, photo: null, freq: 0 };
+          p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, fixed: false, photo: null, freq: 0 };
           s.players.push(p);
         }
         if (s.presences.some(x => x.pid === p.id)) return fail(`${p.name} já está na lista.`);
@@ -206,28 +286,50 @@
         const dup = s.players.find(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== a.id);
         if (dup) return fail(`Já existe alguém chamado ${dup.name}.`);
         let p = a.id ? pm[a.id] : null;
-        if (!p) { p = { id: newId(s, 'p'), photo: null, freq: 0 }; s.players.push(p); }
+        if (!p) { p = { id: newId(s, 'p'), photo: null, freq: 0, fixed: false }; s.players.push(p); }
         Object.assign(p, { name, gender: a.gender, skill: clampSkill(a.skill), paid: !!a.paid, guest: !!a.guest });
+        if (a.fixed !== undefined) p.fixed = !!a.fixed && !p.guest;
         return ok;
       }
       case 'deletePlayer': {
         s.players = s.players.filter(x => x.id !== a.id);
         s.presences = s.presences.filter(x => x.pid !== a.id);
+        s.out = s.out.filter(id => id !== a.id);
         delete s.roles[a.id];
         if (s.teams) s.teams.list = s.teams.list.map(t => t.filter(id => id !== a.id));
         return ok;
       }
       case 'togglePaid': { const p = pm[a.id]; if (p) p.paid = !p.paid; return ok; }
+      case 'toggleFixed': {
+        const p = pm[a.id];
+        if (!p || p.guest) return fail('Convidado não pode ter vaga garantida.');
+        p.fixed = !p.fixed;
+        if (p.fixed) s.presences = s.presences.filter(x => x.pid !== p.id);
+        else s.out = s.out.filter(id => id !== p.id);
+        return ok;
+      }
       case 'settings': {
         const st = s.settings;
-        if (a.groupName !== undefined) st.groupName = cleanName(a.groupName) || 'Vôlei';
-        if (a.title !== undefined) st.title = String(a.title).trim().slice(0, 60);
-        if (a.date !== undefined) st.date = String(a.date).slice(0, 10);
-        if (a.start !== undefined) st.start = String(a.start).slice(0, 5);
-        if (a.end !== undefined) st.end = String(a.end).slice(0, 5);
-        if (a.max !== undefined) st.max = Math.min(60, Math.max(4, Math.round(Number(a.max) || 18)));
+        if (a.groupName !== undefined) st.groupName = cleanName(a.groupName) || 'Vôlei Gran Felicitá';
+        if (a.max !== undefined) st.max = Math.min(60, Math.max(4, Math.round(Number(a.max) || 24)));
         if (a.perTeam !== undefined) st.perTeam = Math.min(9, Math.max(2, Math.round(Number(a.perTeam) || 6)));
         if (a.guestLimit !== undefined) st.guestLimit = Math.min(10, Math.max(0, Math.round(Number(a.guestLimit) || 0)));
+        if (a.paidPriority !== undefined) st.paidPriority = !!a.paidPriority;
+        return ok;
+      }
+      case 'schedule': {
+        if (!Array.isArray(a.schedule) || a.schedule.length > 7) return fail('Horários inválidos.');
+        const list = [];
+        for (const g of a.schedule) {
+          const day = Number(g.day), openDay = Number(g.openDay);
+          const start = cleanTime(g.start), end = cleanTime(g.end), openTime = cleanTime(g.openTime);
+          if (!(day >= 0 && day <= 6 && openDay >= 0 && openDay <= 6) || !start || !end || !openTime) return fail('Preencha dia e horários de todos os jogos.');
+          if (toMins(end) <= toMins(start)) return fail('O horário de fim precisa ser depois do início.');
+          if (list.some(x => x.day === day)) return fail(`Tem dois jogos na ${DAYS[day].toLowerCase()}.`);
+          list.push({ day, start, end, openDay, openTime });
+        }
+        s.settings.schedule = list.sort((x, y) => x.day - y.day);
+        s.current = activeGame(s, now);
         return ok;
       }
       case 'lockNow': {
@@ -236,14 +338,9 @@
         return ok;
       }
       case 'unlock': s.settings.manualLockUntil = 0; return ok;
-      case 'autoLock': {
-        s.settings.autoLock = { enabled: !!a.enabled, day: Math.min(6, Math.max(0, Number(a.day) || 0)), from: String(a.from || '00:00').slice(0, 5), to: String(a.to || '00:00').slice(0, 5) };
-        return ok;
-      }
       case 'resetPresences': {
-        const d = derive(s);
-        d.confirmed.forEach(id => { const p = pm[id]; if (p) p.freq = (p.freq || 0) + 1; });
-        s.presences = []; s.roles = {}; s.teams = null; s.log = [];
+        finishGame(s);
+        s.presences = []; s.out = []; s.roles = {}; s.teams = null; s.log = [];
         return ok;
       }
       case 'resetFreq': s.players.forEach(p => { p.freq = 0; }); return ok;
@@ -258,5 +355,5 @@
     return Object.assign({}, s, { suggestions: isAdmin ? s.suggestions : [] });
   }
 
-  return { DAYS, initialState, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  return { DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGame, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });

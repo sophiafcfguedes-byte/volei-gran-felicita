@@ -14,7 +14,8 @@ const PUBLIC = path.join(__dirname, 'public');
 if (!ADMIN_PASSWORD) console.warn('⚠️  Defina ADMIN_PASSWORD, senão ninguém consegue entrar como admin.');
 
 let state = L.initialState();
-try { state = Object.assign(L.initialState(), JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))); } catch (e) { /* primeiro uso */ }
+try { state = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) { /* primeiro uso */ }
+L.normalize(state, Date.now());
 let version = Date.now();
 
 function save() {
@@ -46,6 +47,7 @@ http.createServer(async (req, res) => {
   try {
     if (url.pathname === '/api/state' && req.method === 'GET') {
       const adm = isAdmin(req);
+      L.normalize(state, Date.now());
       return send(res, 200, { version, isAdmin: adm, now: Date.now(), state: L.publicState(state, adm) });
     }
     if (url.pathname === '/api/action' && req.method === 'POST') {
@@ -62,9 +64,10 @@ http.createServer(async (req, res) => {
     }
     /* Resumo em texto — útil para o robô do WhatsApp mandar no grupo. */
     if (url.pathname === '/api/resumo' && req.method === 'GET') {
+      L.normalize(state, Date.now());
       const d = L.derive(state), pm = Object.fromEntries(state.players.map(p => [p.id, p]));
       const nm = id => pm[id].name + (pm[id].guest ? ' (C)' : '');
-      const lines = [`🏐 ${state.settings.title} — ${d.confirmed.length}/${state.settings.max}`, ...d.confirmed.map((id, i) => `${i + 1}. ${nm(id)}`)];
+      const lines = [`🏐 ${L.gameTitle(state.current)} (${L.gameWhen(state.current)}) — ${d.confirmed.length}/${state.settings.max}`, ...d.confirmed.map((id, i) => `${i + 1}. ${nm(id)}`)];
       if (d.waitlist.length) lines.push('', 'Espera:', ...d.waitlist.map((id, i) => `${i + 1}. ${nm(id)}`));
       return send(res, 200, lines.join('\n'), 'text/plain; charset=utf-8');
     }
