@@ -8,7 +8,7 @@
   const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const SETTINGS_VERSION = 2;
   const ADMIN_ONLY = new Set([
-    'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'settings', 'schedule', 'lockNow', 'unlock',
+    'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'settings', 'schedule', 'lockNow', 'unlock',
     'resetPresences', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
 
@@ -16,7 +16,7 @@
     return {
       v: SETTINGS_VERSION,
       groupName: 'Vôlei Gran Felicitá',
-      max: 24, perTeam: 6, guestLimit: 3, paidPriority: false,
+      max: 24, teams: 4, perTeam: 6, guestLimit: 3, paidPriority: false,
       schedule: [
         { day: 1, start: '19:00', end: '22:00', openDay: 0, openTime: '12:00' },
         { day: 4, start: '19:00', end: '22:00', openDay: 3, openTime: '12:00' }
@@ -82,6 +82,7 @@
       const old = s.settings || {};
       s.settings = Object.assign(defaultSettings(), { groupName: old.groupName || 'Vôlei Gran Felicitá', perTeam: old.perTeam || 6, guestLimit: old.guestLimit != null ? old.guestLimit : 3 });
     }
+    if (s.settings.teams === undefined) s.settings.teams = 4;
     const g = activeGame(s, now);
     const id = g ? g.id : null;
     if (!s.current || s.current.id !== id) {
@@ -141,8 +142,7 @@
     rand = rand || Math.random;
     const pm = playerMap(s);
     const n = ids.length;
-    const per = Number(s.settings.perTeam) || 6;
-    const k = Math.max(2, Math.min(Math.floor(n / 2), Math.round(n / per)));
+    const k = Math.max(2, Math.min(Math.floor(n / 2), Number(s.settings.teams) || 4));
     const cap = Math.ceil(n / k);
     const P = shuffle(ids.map(id => {
       const p = pm[id], r = s.roles[id] || {};
@@ -198,7 +198,7 @@
     const limit = Number(s.settings.guestLimit) || 0;
 
     if (ADMIN_ONLY.has(a.type) && !admin) return fail('Só quem é admin pode fazer isso.');
-    if (!ADMIN_ONLY.has(a.type) && !me && !admin && a.type !== 'suggest') return fail('Escolha quem você é antes (no topo da lista).');
+    if (!ADMIN_ONLY.has(a.type) && !me && !admin && a.type !== 'suggest' && a.type !== 'register') return fail('Escolha quem você é antes (no topo da lista).');
 
     switch (a.type) {
       case 'join': {
@@ -246,6 +246,32 @@
         s.presences.push({ pid: p.id, by: me ? me.id : null, ts: now });
         log('add', p.id);
         return ok;
+      }
+      case 'register': {
+        const name = cleanName(a.name);
+        if (name.length < 2) return fail('Escreva seu nome.');
+        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha seu gênero.');
+        if (s.players.filter(x => !x.guest).length >= 300) return fail('O grupo chegou no limite de cadastros. Fale com um admin.');
+        let p = s.players.find(x => x.name.toLowerCase() === name.toLowerCase());
+        if (p && !p.guest) return fail(`Já tem alguém chamado ${p.name}. Procure na lista, ou use um sobrenome.`);
+        if (p) { p.guest = false; p.gender = a.gender; }
+        else { p = { id: newId(s, 'p'), name, gender: a.gender, skill: 3, paid: false, guest: false, fixed: false, photo: null, freq: 0 }; s.players.push(p); }
+        return { ok: true, id: p.id };
+      }
+      case 'bulkAdd': {
+        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero de quem está na lista.');
+        const lines = String(a.text || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean).slice(0, 200);
+        if (!lines.length) return fail('Cole pelo menos um nome.');
+        let added = 0, skipped = 0;
+        for (const line of lines) {
+          const m = line.replace(/^[-•*\d.)\s]+(?=\D)/, '').match(/^(.*?)(?:\s+([1-5]))?$/);
+          const name = cleanName(m ? m[1] : line);
+          if (name.length < 2) continue;
+          if (s.players.some(x => x.name.toLowerCase() === name.toLowerCase())) { skipped++; continue; }
+          s.players.push({ id: newId(s, 'p'), name, gender: a.gender, skill: m && m[2] ? Number(m[2]) : 3, paid: false, guest: false, fixed: false, photo: null, freq: 0 });
+          added++;
+        }
+        return { ok: true, added, skipped };
       }
       case 'role': {
         if (!['setter', 'late'].includes(a.role) || !pm[a.pid]) return fail('Ação inválida.');
@@ -312,7 +338,7 @@
         const st = s.settings;
         if (a.groupName !== undefined) st.groupName = cleanName(a.groupName) || 'Vôlei Gran Felicitá';
         if (a.max !== undefined) st.max = Math.min(60, Math.max(4, Math.round(Number(a.max) || 24)));
-        if (a.perTeam !== undefined) st.perTeam = Math.min(9, Math.max(2, Math.round(Number(a.perTeam) || 6)));
+        if (a.teams !== undefined) st.teams = Math.min(8, Math.max(2, Math.round(Number(a.teams) || 4)));
         if (a.guestLimit !== undefined) st.guestLimit = Math.min(10, Math.max(0, Math.round(Number(a.guestLimit) || 0)));
         if (a.paidPriority !== undefined) st.paidPriority = !!a.paidPriority;
         return ok;
@@ -352,7 +378,9 @@
 
   /* O que todo mundo pode ver (sugestões só para admin). */
   function publicState(s, isAdmin) {
-    return Object.assign({}, s, { suggestions: isAdmin ? s.suggestions : [] });
+    if (isAdmin) return Object.assign({}, s);
+    const players = s.players.map(p => { const q = Object.assign({}, p); delete q.skill; return q; });
+    return Object.assign({}, s, { players, suggestions: [] });
   }
 
   return { DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGame, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
