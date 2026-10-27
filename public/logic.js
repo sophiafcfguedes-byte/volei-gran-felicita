@@ -457,7 +457,7 @@
     const lockMsg = lk.reason === 'notOpen' ? 'O check-in ainda não abriu.' : lk.reason === 'closed' ? `A lista fechou às ${meta.cutoff}.` : 'A lista está fechada agora.';
     const locked = lk.locked && !admin;
     const log = (act, pid) => { v.log.unshift({ ts: now, by: me ? me.id : null, act, pid: pid || null }); if (v.log.length > 300) v.log.length = 300; };
-    const addedByMe = () => v.presences.filter(x => x.by === a.by && x.pid !== a.by && pm[x.pid] && pm[x.pid].guest).length;
+    const addedByMe = () => v.presences.filter(x => x.by === a.by && x.pid !== a.by && pm[x.pid] && (pm[x.pid].guest || x.asGuest)).length;
     const limitMsg = limit ? `Você já trouxe ${limit} convidado${limit > 1 ? 's' : ''}. Esse é o limite.` : 'Esse grupo não aceita convidados.';
     const isFixedHere = p => meta.fixed && p.fixed && canSee(meta, p);
 
@@ -491,7 +491,7 @@
         }
         const pres = v.presences.find(x => x.pid === a.pid);
         if (!pres) return ok;
-        if (!admin && a.pid !== a.by && !(p && p.guest && pres.by === a.by)) return fail(p && p.guest ? 'Só quem trouxe o convidado pode tirar.' : 'Cada um só desmarca o próprio nome.');
+        if (!admin && a.pid !== a.by && !(p && (p.guest || pres.asGuest) && pres.by === a.by)) return fail(p && (p.guest || pres.asGuest) ? 'Só quem trouxe o convidado pode tirar.' : 'Cada um só desmarca o próprio nome.');
         if (locked && lk.reason !== 'notOpen' && lk.reason !== 'closed') return fail(lockMsg);
         const wasConfirmed = derive(v).confirmed.includes(a.pid);
         v.presences = v.presences.filter(x => x.pid !== a.pid);
@@ -515,12 +515,22 @@
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva o nome do convidado.');
-        if (name.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
         if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero do convidado.');
         if (!admin && addedByMe() >= limit) return fail(limitMsg);
         if (me && fold(name) === fold(me.name)) return fail('Esse é o seu nome. Se o convidado for outra pessoa, coloque o sobrenome dele.');
         let p = s.players.find(x => fold(x.name) === fold(name));
-        if (p && !p.guest) return fail(`Já tem ${p.name} no grupo. Se o convidado for outra pessoa, coloque o sobrenome dele.`);
+        if (p && !p.guest) {
+          /* Já tem cadastro: entra como convidado de quem trouxe, com o nível do cadastro (não cria outro). */
+          if (!canSee(meta, p)) return fail(`${p.name} não tem a bolinha desse jogo.`);
+          if (isFixedHere(p)) return fail(`${p.name} é da comissão e já tem vaga garantida.`);
+          if (v.presences.some(x => x.pid === p.id)) return fail(`${p.name} já está na lista.`);
+          const b = (s.bans || []).find(x => x.pid === p.id && x.game === meta.id);
+          if (b && !admin) return fail(`${p.name} está fora deste jogo por ter desistido depois das ${b.cutoff}.`);
+          v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now, asGuest: true });
+          log('add', p.id);
+          return ok;
+        }
+        if (!p && name.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
         if (!p) {
           p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0 };
           s.players.push(p);

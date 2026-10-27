@@ -719,7 +719,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     const lockMsg = lk.reason === 'notOpen' ? 'O check-in ainda não abriu.' : lk.reason === 'closed' ? `A lista fechou às ${meta.cutoff}.` : 'A lista está fechada agora.';
     const locked = lk.locked && !admin;
     const log = (act, pid) => { v.log.unshift({ ts: now, by: me ? me.id : null, act, pid: pid || null }); if (v.log.length > 300) v.log.length = 300; };
-    const addedByMe = () => v.presences.filter(x => x.by === a.by && x.pid !== a.by && pm[x.pid] && pm[x.pid].guest).length;
+    const addedByMe = () => v.presences.filter(x => x.by === a.by && x.pid !== a.by && pm[x.pid] && (pm[x.pid].guest || x.asGuest)).length;
     const limitMsg = limit ? `Você já trouxe ${limit} convidado${limit > 1 ? 's' : ''}. Esse é o limite.` : 'Esse grupo não aceita convidados.';
     const isFixedHere = p => meta.fixed && p.fixed && canSee(meta, p);
 
@@ -753,7 +753,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         }
         const pres = v.presences.find(x => x.pid === a.pid);
         if (!pres) return ok;
-        if (!admin && a.pid !== a.by && !(p && p.guest && pres.by === a.by)) return fail(p && p.guest ? 'Só quem trouxe o convidado pode tirar.' : 'Cada um só desmarca o próprio nome.');
+        if (!admin && a.pid !== a.by && !(p && (p.guest || pres.asGuest) && pres.by === a.by)) return fail(p && (p.guest || pres.asGuest) ? 'Só quem trouxe o convidado pode tirar.' : 'Cada um só desmarca o próprio nome.');
         if (locked && lk.reason !== 'notOpen' && lk.reason !== 'closed') return fail(lockMsg);
         const wasConfirmed = derive(v).confirmed.includes(a.pid);
         v.presences = v.presences.filter(x => x.pid !== a.pid);
@@ -777,12 +777,22 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva o nome do convidado.');
-        if (name.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
         if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero do convidado.');
         if (!admin && addedByMe() >= limit) return fail(limitMsg);
         if (me && fold(name) === fold(me.name)) return fail('Esse é o seu nome. Se o convidado for outra pessoa, coloque o sobrenome dele.');
         let p = s.players.find(x => fold(x.name) === fold(name));
-        if (p && !p.guest) return fail(`Já tem ${p.name} no grupo. Se o convidado for outra pessoa, coloque o sobrenome dele.`);
+        if (p && !p.guest) {
+          /* Já tem cadastro: entra como convidado de quem trouxe, com o nível do cadastro (não cria outro). */
+          if (!canSee(meta, p)) return fail(`${p.name} não tem a bolinha desse jogo.`);
+          if (isFixedHere(p)) return fail(`${p.name} é da comissão e já tem vaga garantida.`);
+          if (v.presences.some(x => x.pid === p.id)) return fail(`${p.name} já está na lista.`);
+          const b = (s.bans || []).find(x => x.pid === p.id && x.game === meta.id);
+          if (b && !admin) return fail(`${p.name} está fora deste jogo por ter desistido depois das ${b.cutoff}.`);
+          v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now, asGuest: true });
+          log('add', p.id);
+          return ok;
+        }
+        if (!p && name.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
         if (!p) {
           p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0 };
           s.players.push(p);
@@ -898,7 +908,7 @@ const Backend = {
     if (mode === 'demo') {
       if (a.type === 'login') return a.password === 'admin' ? { ok: true, token: 'demo' } : { ok: false, error: 'Senha incorreta. Na demonstração a senha é admin.' };
       const r = LG.apply(demo, a, { isAdmin: token === 'demo', now: Date.now() });
-      if (r.ok) store.set('demoState11', demo);
+      if (r.ok) store.set('demoState12', demo);
       return Object.assign(r, demoPayload());
     }
     const r = await fetch('api/action', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'x-admin-token': token } : {}), body: JSON.stringify(a) });
@@ -1045,7 +1055,7 @@ function renderHeader() {
 function renderWho() {
   const p = me && P(me);
   if (!p) return `<div class="card who"><div class="grow"><b>Quem é você?</b><div class="hint">Escolha seu nome pra fazer check-in.</div></div><button class="btn btn-primary" data-act="whoami">Escolher</button></div>`;
-  const mine = S.presences.filter(x => x.by === me && x.pid !== me && P(x.pid) && P(x.pid).guest).length, lim = S.settings.guestLimit;
+  const mine = S.presences.filter(x => x.by === me && x.pid !== me && P(x.pid) && (P(x.pid).guest || x.asGuest)).length, lim = S.settings.guestLimit;
   const allowG = !S.current || S.current.guests !== false;
   const sub = p.fixed && S.current && S.current.fixed ? 'Você tem vaga garantida da comissão' : allowG && lim ? `Você só marca o seu nome · trouxe ${mine} de ${lim} convidado${lim > 1 ? 's' : ''}` : 'Você só marca e desmarca o seu nome';
   return `<div class="card who">${avatar(p)}<div class="grow"><b>${h(p.name)}</b><div class="hint">${sub}</div></div><button class="link" data-act="whoami">Trocar</button></div>`;
@@ -1066,7 +1076,7 @@ function renderLista() {
   const allowGuests = !S.current || S.current.guests !== false;
   const row = p => {
     const pres = S.presences.find(x => x.pid === p.id);
-    const mine = isAdmin || p.id === me || (p.guest && allowGuests && (!pres || pres.by === me));
+    const mine = isAdmin || p.id === me || (p.guest && allowGuests && (!pres || pres.by === me)) || (pres && pres.asGuest && pres.by === me);
     const on = !!pos[p.id], leaveAfterClose = on && mine && lk.reason === 'closed';
     const can = fxHere(p) ? canEditFixed(p) : (edit && mine && (isAdmin || !banned.has(p.id))) || leaveAfterClose;
     return `<label class="row${on ? ' on' : ''}" data-n="${h(norm(p.name))}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${can ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${p.paid ? '<span class="paid">pago</span>' : ''}${pos[p.id] || (banned.has(p.id) ? '<span class="pos ban">suspenso</span>' : fxHere(p) ? '<span class="pos wait">não vai</span>' : '')}</label>`;
@@ -1419,7 +1429,7 @@ function applyTheme() {
 async function boot() {
   applyTheme();
   try { applyPayload(await Backend.load()); }
-  catch (e) { mode = 'demo'; demo = store.get('demoState11', null) || seedDemo(); store.set('demoState11', demo); applyPayload(demoPayload()); }
+  catch (e) { mode = 'demo'; demo = store.get('demoState12', null) || seedDemo(); store.set('demoState12', demo); applyPayload(demoPayload()); }
   render();
   if (mode === 'server') { setInterval(poll, 8000); document.addEventListener('visibilitychange', poll); }
   setInterval(() => { if (S) { const lk = JSON.stringify(LG.lockInfo(S, now())); if (lk !== boot.lk) { boot.lk = lk; render(); } } }, 30000);
