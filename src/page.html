@@ -295,7 +295,7 @@ const Backend = {
     if (mode === 'demo') {
       if (a.type === 'login') return a.password === 'admin' ? { ok: true, token: 'demo' } : { ok: false, error: 'Senha incorreta. Na demonstração a senha é admin.' };
       const r = LG.apply(demo, a, { isAdmin: token === 'demo', now: Date.now() });
-      if (r.ok) store.set('demoState3', demo);
+      if (r.ok) store.set('demoState4', demo);
       return Object.assign(r, demoPayload());
     }
     const r = await fetch('api/action', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'x-admin-token': token } : {}), body: JSON.stringify(a) });
@@ -501,7 +501,7 @@ function renderTimes() {
         const sum = ps.reduce((a, p) => a + (Number(p.skill) || 0), 0);
         const f = ps.filter(p => p.gender === 'F').length;
         return `<section class="team"><header><h3>Time ${i + 1}</h3><span class="small">${ps.length} jogadores</span></header><ul>${ps.map(p => `<li>${avatar(p)}<span>${h(nameOf(p))}</span></li>`).join('')}</ul>
-          <footer>${ps.length - f} homens · ${f} mulheres${isAdmin ? ` · nível ${sum}` : ''}</footer></section>`; }).join('')}</div>
+          <footer>${ps.length - f} homens · ${f} mulheres${isAdmin ? ` · nível ${sum}` : ''}${ps.length > 6 ? `<br><b>Time com ${ps.length}:</b> joga quem chegar primeiro, os outros entram no rodízio.` : ''}</footer></section>`; }).join('')}</div>
       <p class="hint">Sorteado às ${fmtTime(S.teams.ts)}${S.teams.by && P(S.teams.by) ? ' por ' + h(P(S.teams.by).name) : ''}.</p>
       <a class="btn btn-wa" href="${h(waLink(teamsText()))}" target="_blank" rel="noopener">${ICON.wa}Mandar times no WhatsApp</a>`;
   }
@@ -742,7 +742,7 @@ function applyTheme() {
 async function boot() {
   applyTheme();
   try { applyPayload(await Backend.load()); }
-  catch (e) { mode = 'demo'; demo = store.get('demoState3', null) || seedDemo(); store.set('demoState3', demo); applyPayload(demoPayload()); }
+  catch (e) { mode = 'demo'; demo = store.get('demoState4', null) || seedDemo(); store.set('demoState4', demo); applyPayload(demoPayload()); }
   render();
   if (mode === 'server') { setInterval(poll, 8000); document.addEventListener('visibilitychange', poll); }
   setInterval(() => { if (S) { const lk = JSON.stringify(LG.lockInfo(S, now())); if (lk !== boot.lk) { boot.lk = lk; render(); } } }, 30000);
