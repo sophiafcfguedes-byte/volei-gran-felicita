@@ -344,12 +344,12 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     return {
       settings: Object.assign({}, s.settings, { max: g.meta.max, teams: g.meta.teams }),
       players: s.players, current: g.meta,
-      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log
+      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log, frozen: g.frozen || null
     };
   }
   function writeBack(s, id, v) {
     const g = s.games[id];
-    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log;
+    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log; g.frozen = v.frozen || null;
   }
 
   /* Ajusta estados antigos, fecha jogos que já acabaram (+1 na frequência
@@ -399,6 +399,9 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     for (const meta of act) {
       if (!s.games[meta.id]) s.games[meta.id] = emptyGame(meta);
       else s.games[meta.id].meta = meta;
+      /* No horário-limite (17h do dia do jogo) a lista fecha com quem está confirmado. */
+      const g = s.games[meta.id];
+      if (!g.frozen && now >= meta.cutoffAt) g.frozen = derive(view(s, meta.id)).confirmed.slice();
     }
     return s;
   }
@@ -418,6 +421,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     if (!g) return { locked: true, reason: 'noGame' };
     if (v.settings.manualLockUntil && v.settings.manualLockUntil > now) return { locked: true, reason: 'manual', until: v.settings.manualLockUntil };
     if (now < g.openAt) return { locked: true, reason: 'notOpen', opensAt: g.openAt };
+    if (g.cutoffAt && now >= g.cutoffAt) return { locked: true, reason: 'closed', at: g.cutoffAt };
     return { locked: false };
   }
 
@@ -436,6 +440,13 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     const ordered = v.presences.filter(x => pm[x.pid] && !isFixedHere(pm[x.pid])).slice()
       .sort((a, b) => (prio ? (pm[b.pid].paid ? 1 : 0) - (pm[a.pid].paid ? 1 : 0) : 0) || a.ts - b.ts);
     const open = Math.max(0, (Number(meta.max) || 24) - fixed.length);
+    if (v.frozen) {
+      /* Lista fechada: só joga quem estava confirmado no horário-limite; a espera não sobe mais. */
+      const fz = new Set(v.frozen), present = new Set(v.presences.map(x => x.pid));
+      const fixedF = fixed.filter(id => fz.has(id));
+      const regular = v.frozen.filter(id => pm[id] && !isFixedHere(pm[id]) && present.has(id));
+      return { fixed: fixedF, ordered, open, frozen: true, regular, confirmed: fixedF.concat(regular), waitlist: ordered.filter(x => !fz.has(x.pid)).map(x => x.pid) };
+    }
     return {
       fixed, ordered, open,
       regular: ordered.slice(0, open).map(x => x.pid),
@@ -650,7 +661,8 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     const ok = { ok: true };
     const meta = v.current;
     const lk = lockInfo(v, now);
-    const lockMsg = lk.reason === 'notOpen' ? 'O check-in ainda não abriu.' : 'A lista está fechada agora.';
+    const lockMsg = lk.reason === 'notOpen' ? 'O check-in ainda não abriu.' : lk.reason === 'closed' ? `A lista fechou às ${meta.cutoff}.` : 'A lista está fechada agora.';
+    const addFrozen = id => { if (v.frozen && admin && !v.frozen.includes(id)) v.frozen.push(id); };
     const locked = lk.locked && !admin;
     const log = (act, pid) => { v.log.unshift({ ts: now, by: me ? me.id : null, act, pid: pid || null }); if (v.log.length > 300) v.log.length = 300; };
     const addedByMe = () => v.presences.filter(x => x.by === a.by && x.pid !== a.by && pm[x.pid] && pm[x.pid].guest).length;
@@ -665,7 +677,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         if (p.guest && !meta.guests && !admin) return fail('Esse jogo não aceita convidados.');
         if (isFixedHere(p)) {
           if (!admin && a.pid !== a.by) return fail('Só a própria pessoa ou um admin mexe na vaga da comissão.');
-          v.out = v.out.filter(id => id !== p.id); log('add', p.id); return ok;
+          v.out = v.out.filter(id => id !== p.id); addFrozen(p.id); log('add', p.id); return ok;
         }
         if (!admin && p.id !== a.by && !p.guest) return fail('Cada um só marca o próprio nome.');
         const ban = !admin && (s.bans || []).find(b => b.pid === p.id && b.game === meta.id);
@@ -674,6 +686,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         if (v.presences.some(x => x.pid === p.id)) return ok;
         if (!admin && p.id !== a.by && addedByMe() >= limit) return fail(limitMsg);
         v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now });
+        addFrozen(p.id);
         log('add', p.id);
         return ok;
       }
@@ -687,7 +700,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         const pres = v.presences.find(x => x.pid === a.pid);
         if (!pres) return ok;
         if (!admin && a.pid !== a.by && !(p && p.guest && pres.by === a.by)) return fail(p && p.guest ? 'Só quem trouxe o convidado pode tirar.' : 'Cada um só desmarca o próprio nome.');
-        if (locked && lk.reason !== 'notOpen') return fail(lockMsg);
+        if (locked && lk.reason !== 'notOpen' && lk.reason !== 'closed') return fail(lockMsg);
         const wasConfirmed = derive(v).confirmed.includes(a.pid);
         v.presences = v.presences.filter(x => x.pid !== a.pid);
         delete v.roles[a.pid];
@@ -721,6 +734,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         }
         if (v.presences.some(x => x.pid === p.id)) return fail(`${p.name} já está na lista.`);
         v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now });
+        addFrozen(p.id);
         log('add', p.id);
         return ok;
       }
@@ -828,7 +842,7 @@ const Backend = {
     if (mode === 'demo') {
       if (a.type === 'login') return a.password === 'admin' ? { ok: true, token: 'demo' } : { ok: false, error: 'Senha incorreta. Na demonstração a senha é admin.' };
       const r = LG.apply(demo, a, { isAdmin: token === 'demo', now: Date.now() });
-      if (r.ok) store.set('demoState7', demo);
+      if (r.ok) store.set('demoState9', demo);
       return Object.assign(r, demoPayload());
     }
     const r = await fetch('api/action', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'x-admin-token': token } : {}), body: JSON.stringify(a) });
@@ -852,7 +866,9 @@ function seedDemo() {
     ids.slice(0, n).forEach((id, i) => g.presences.push({ pid: id, by: id, ts: base + i * 47e3 }));
     if (!g.meta.private) g.presences.push({ pid: g1, by: ids[3], ts: base + 24 * 47e3 }, { pid: g2, by: ids[0], ts: base + 25 * 47e3 });
     g.presences.slice().reverse().slice(0, 6).forEach(p => g.log.push({ ts: p.ts, by: p.by, act: 'add', pid: p.pid }));
+    g.frozen = null;
   }
+  LG.normalize(s, Date.now());
   return s;
 }
 
@@ -956,7 +972,7 @@ function renderHeader() {
   const st = S.settings, g = S.current, lk = LG.lockInfo(S, now());
   let chip;
   if (lk.reason === 'notOpen') chip = `<span class="chip chip-lock">Check-in abre ${LG.DAYS_SHORT[spDate(g.openAt).wd]} às ${fmtTime(g.openAt)}</span>`;
-  else if (lk.locked) chip = `<span class="chip chip-lock">${lk.reason === 'noGame' ? 'Sem jogo marcado' : 'Lista fechada até ' + fmtTime(lk.until)}</span>`;
+  else if (lk.locked) chip = `<span class="chip chip-lock">${lk.reason === 'noGame' ? 'Sem jogo marcado' : lk.reason === 'closed' ? 'Lista fechada às ' + g.cutoff : 'Lista fechada até ' + fmtTime(lk.until)}</span>`;
   else chip = '<span class="chip chip-open">Check-in aberto</span>';
   const cal = g ? (() => { const p = spDate(g.startAt); return `<div class="cal" aria-label="${h(fmtLong(g.startAt))}"><span class="cal-m">${LG.MONTHS[p.m]}</span><span class="cal-d">${p.d}</span><span class="cal-w">${LG.DAYS[p.wd]}</span></div>`; })() : '';
   return `
@@ -993,7 +1009,8 @@ function renderLista() {
   const row = p => {
     const pres = S.presences.find(x => x.pid === p.id);
     const mine = isAdmin || p.id === me || (p.guest && allowGuests && (!pres || pres.by === me));
-    const on = !!pos[p.id], can = fxHere(p) ? canEditFixed(p) : edit && mine && (isAdmin || !banned.has(p.id));
+    const on = !!pos[p.id], leaveAfterClose = on && mine && lk.reason === 'closed';
+    const can = fxHere(p) ? canEditFixed(p) : (edit && mine && (isAdmin || !banned.has(p.id))) || leaveAfterClose;
     return `<label class="row${on ? ' on' : ''}" data-n="${h(norm(p.name))}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${can ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${p.paid ? '<span class="paid">pago</span>' : ''}${pos[p.id] || (banned.has(p.id) ? '<span class="pos ban">suspenso</span>' : fxHere(p) ? '<span class="pos wait">não vai</span>' : '')}</label>`;
   };
   const section = (title, list) => list.length ? `<div class="card" data-sec><div class="sec-h"><h2>${title}</h2><span class="muted">${list.filter(p => pos[p.id]).length} de ${list.length}</span></div><div class="list">${list.map(row).join('')}</div></div>` : '';
@@ -1003,11 +1020,12 @@ function renderLista() {
   const myBan = me && (S.bans || []).find(b => S.current && b.game === S.current.id && b.pid === me);
   if (myBan) lockMsg += `<div class="notice">Você tirou o nome do vôlei de ${LG.DAYS[myBan.fromDay].toLowerCase()} (${fmtDM(myBan.from)}) depois das ${h(myBan.cutoff)}, então está fora deste jogo.${isAdmin ? '' : ' Se foi engano, fale com a comissão.'}</div>`;
   if (lk.reason === 'notOpen') lockMsg = `<div class="card opens"><img class="mascot sm" src="${IMG.front}" alt=""><div><b>O check-in abre ${h(opensText(S.current))}</b><div class="hint">${isAdmin ? 'Você é admin e já consegue mexer na lista.' : 'Volte nesse horário. Quem marcar primeiro garante a vaga.'}</div></div></div>`;
+  else if (lk.reason === 'closed') lockMsg = `<div class="notice">A lista fechou às ${h(S.current.cutoff)} com os confirmados. A espera não sobe mais: quem sair agora deixa a vaga vazia e fica fora do próximo jogo.</div>`;
   else if (lk.locked && !isAdmin) lockMsg = `<div class="notice">A lista está fechada agora. Só quem é admin consegue mexer.</div>`;
   const prio = S.settings.paidPriority;
   const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} ${p.paid ? '<span class="paid">pago</span>' : ''}</span>${by || t}</li>`; };
   return `${demoNote}${renderWho()}${lockMsg}
-    <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir. Cada um só marca e desmarca o próprio nome.</p>
+    <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir até as ${h(S.current ? S.current.cutoff : '17:00')} do dia do jogo, quando a lista fecha. Cada um só marca e desmarca o próprio nome.</p>
     <div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
     ${section('Mulheres', members.filter(p => p.gender === 'F'))}
     ${section('Homens', members.filter(p => p.gender !== 'F'))}
@@ -1020,7 +1038,7 @@ function renderLista() {
     <div class="card"><div class="sec-h"><h2>Confirmados</h2><span class="muted">${D.confirmed.length}/${S.settings.max}</span></div>
       ${D.fixed.length ? `<ul class="conf fx">${D.fixed.map(id => `<li>${avatar(P(id))}<span class="nm">${h(nameOf(P(id)))}</span><span class="by">vaga garantida</span></li>`).join('')}</ul>` : ''}
       ${D.regular.length ? `<ol class="conf">${D.regular.map(li).join('')}</ol>` : '<p class="hint">Ninguém fez check-in ainda.</p>'}
-      ${D.waitlist.length ? `<h3 style="font-size:1rem;color:var(--warn)">Lista de espera</h3><ol class="conf wait">${D.waitlist.map(li).join('')}</ol>` : ''}
+      ${D.waitlist.length ? `<h3 style="font-size:1rem;color:var(--warn)">${D.frozen ? 'Lista de espera (não entra mais)' : 'Lista de espera'}</h3><ol class="conf wait">${D.waitlist.map(li).join('')}</ol>` : ''}
       <a class="btn btn-wa" href="${h(waLink(listText()))}" target="_blank" rel="noopener">${ICON.wa}Mandar lista no WhatsApp</a>
     </div>
     ${S.log.length ? `<div class="card"><h2>O que aconteceu</h2><ul class="log">${S.log.slice(0, 20).map(l => {
@@ -1084,7 +1102,8 @@ function renderMais() {
     <div class="card"><details><summary>Como a lista funciona</summary><ul class="rules" style="margin-top:10px">
       ${sched.map(g => `<li><b>${LG.DAYS[g.day]}</b>, das ${h(g.start)} às ${h(g.end)}: ${g.max} vagas${g.fixed ? ' (a comissão já tem vaga garantida)' : ''}${g.guests === false ? ', sem convidados' : ''}. Check-in abre ${LG.DAYS[g.openDay].toLowerCase()} às ${h(g.openTime)}.</li>`).join('')}
       <li>As vagas vão por ordem de check-in.</li>
-      <li><b>Desistência:</b> quem estava confirmado e tirar o nome no dia do jogo a partir das ${h((sched[0] || {}).cutoff || '17:00')} fica fora do próximo jogo. Segunda e quinta contam juntas (saiu da segunda, perde a quinta; saiu da quinta, perde a segunda)${sched.some(g => g.private) ? '; a quarta conta separado (perde a quarta seguinte)' : ''}. Quem está na lista de espera pode sair sem problema.</li>
+      <li><b>Às ${h((sched[0] || {}).cutoff || '17:00')} do dia do jogo a lista fecha</b> com os confirmados. Até lá, se alguém sair, o primeiro da espera sobe sozinho; depois disso, ninguém mais entra.</li>
+      <li><b>Desistência:</b> quem estava confirmado e tirar o nome depois que a lista fechou deixa a vaga vazia e fica fora do próximo jogo. Segunda e quinta contam juntas (saiu da segunda, perde a quinta; saiu da quinta, perde a segunda)${sched.some(g => g.private) ? '; a quarta conta separado (perde a quarta seguinte)' : ''}. Quem está na lista de espera pode sair sem problema.</li>
       ${st.paidPriority ? '<li>Quem pagou a vaquinha passa na frente de quem não pagou.</li>' : ''}
       <li>Passou das vagas, entra na lista de espera, que sobe sozinha quando alguém desiste.</li>
       <li>Cada pessoa só marca e desmarca o próprio nome.${st.guestLimit ? ` Nos jogos que aceitam convidados, cada um pode trazer até ${st.guestLimit}, e só quem trouxe pode tirar.` : ''}</li>
@@ -1273,7 +1292,7 @@ document.addEventListener('change', e => {
     if (!t.checked && pid === me && !isAdmin && g && now() >= g.cutoffAt && now() < g.endAt && D.regular.includes(pid)) {
       t.checked = true;
       const nx = LG.nextInSeries(RAW, g);
-      return openConfirm(`Já passou das ${g.cutoff} do dia do jogo. Se você tirar seu nome agora, fica fora do ${nx ? `vôlei de ${LG.DAYS[nx.day].toLowerCase()} (${fmtDM(nx.id)})` : 'próximo jogo'}.`, 'Tirar mesmo assim', () => act({ type: 'leave', pid }));
+      return openConfirm(`A lista já fechou (${g.cutoff}). Se você tirar seu nome agora, a vaga fica vazia e você fica fora do ${nx ? `vôlei de ${LG.DAYS[nx.day].toLowerCase()} (${fmtDM(nx.id)})` : 'próximo jogo'}.`, 'Tirar mesmo assim', () => act({ type: 'leave', pid }));
     }
     return act({ type: t.checked ? 'join' : 'leave', pid });
   }
@@ -1308,7 +1327,7 @@ function applyTheme() {
 async function boot() {
   applyTheme();
   try { applyPayload(await Backend.load()); }
-  catch (e) { mode = 'demo'; demo = store.get('demoState7', null) || seedDemo(); store.set('demoState7', demo); applyPayload(demoPayload()); }
+  catch (e) { mode = 'demo'; demo = store.get('demoState9', null) || seedDemo(); store.set('demoState9', demo); applyPayload(demoPayload()); }
   render();
   if (mode === 'server') { setInterval(poll, 8000); document.addEventListener('visibilitychange', poll); }
   setInterval(() => { if (S) { const lk = JSON.stringify(LG.lockInfo(S, now())); if (lk !== boot.lk) { boot.lk = lk; render(); } } }, 30000);

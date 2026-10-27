@@ -85,12 +85,12 @@
     return {
       settings: Object.assign({}, s.settings, { max: g.meta.max, teams: g.meta.teams }),
       players: s.players, current: g.meta,
-      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log
+      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log, frozen: g.frozen || null
     };
   }
   function writeBack(s, id, v) {
     const g = s.games[id];
-    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log;
+    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log; g.frozen = v.frozen || null;
   }
 
   /* Ajusta estados antigos, fecha jogos que já acabaram (+1 na frequência
@@ -140,6 +140,9 @@
     for (const meta of act) {
       if (!s.games[meta.id]) s.games[meta.id] = emptyGame(meta);
       else s.games[meta.id].meta = meta;
+      /* No horário-limite (17h do dia do jogo) a lista fecha com quem está confirmado. */
+      const g = s.games[meta.id];
+      if (!g.frozen && now >= meta.cutoffAt) g.frozen = derive(view(s, meta.id)).confirmed.slice();
     }
     return s;
   }
@@ -159,6 +162,7 @@
     if (!g) return { locked: true, reason: 'noGame' };
     if (v.settings.manualLockUntil && v.settings.manualLockUntil > now) return { locked: true, reason: 'manual', until: v.settings.manualLockUntil };
     if (now < g.openAt) return { locked: true, reason: 'notOpen', opensAt: g.openAt };
+    if (g.cutoffAt && now >= g.cutoffAt) return { locked: true, reason: 'closed', at: g.cutoffAt };
     return { locked: false };
   }
 
@@ -177,6 +181,13 @@
     const ordered = v.presences.filter(x => pm[x.pid] && !isFixedHere(pm[x.pid])).slice()
       .sort((a, b) => (prio ? (pm[b.pid].paid ? 1 : 0) - (pm[a.pid].paid ? 1 : 0) : 0) || a.ts - b.ts);
     const open = Math.max(0, (Number(meta.max) || 24) - fixed.length);
+    if (v.frozen) {
+      /* Lista fechada: só joga quem estava confirmado no horário-limite; a espera não sobe mais. */
+      const fz = new Set(v.frozen), present = new Set(v.presences.map(x => x.pid));
+      const fixedF = fixed.filter(id => fz.has(id));
+      const regular = v.frozen.filter(id => pm[id] && !isFixedHere(pm[id]) && present.has(id));
+      return { fixed: fixedF, ordered, open, frozen: true, regular, confirmed: fixedF.concat(regular), waitlist: ordered.filter(x => !fz.has(x.pid)).map(x => x.pid) };
+    }
     return {
       fixed, ordered, open,
       regular: ordered.slice(0, open).map(x => x.pid),
@@ -391,7 +402,8 @@
     const ok = { ok: true };
     const meta = v.current;
     const lk = lockInfo(v, now);
-    const lockMsg = lk.reason === 'notOpen' ? 'O check-in ainda não abriu.' : 'A lista está fechada agora.';
+    const lockMsg = lk.reason === 'notOpen' ? 'O check-in ainda não abriu.' : lk.reason === 'closed' ? `A lista fechou às ${meta.cutoff}.` : 'A lista está fechada agora.';
+    const addFrozen = id => { if (v.frozen && admin && !v.frozen.includes(id)) v.frozen.push(id); };
     const locked = lk.locked && !admin;
     const log = (act, pid) => { v.log.unshift({ ts: now, by: me ? me.id : null, act, pid: pid || null }); if (v.log.length > 300) v.log.length = 300; };
     const addedByMe = () => v.presences.filter(x => x.by === a.by && x.pid !== a.by && pm[x.pid] && pm[x.pid].guest).length;
@@ -406,7 +418,7 @@
         if (p.guest && !meta.guests && !admin) return fail('Esse jogo não aceita convidados.');
         if (isFixedHere(p)) {
           if (!admin && a.pid !== a.by) return fail('Só a própria pessoa ou um admin mexe na vaga da comissão.');
-          v.out = v.out.filter(id => id !== p.id); log('add', p.id); return ok;
+          v.out = v.out.filter(id => id !== p.id); addFrozen(p.id); log('add', p.id); return ok;
         }
         if (!admin && p.id !== a.by && !p.guest) return fail('Cada um só marca o próprio nome.');
         const ban = !admin && (s.bans || []).find(b => b.pid === p.id && b.game === meta.id);
@@ -415,6 +427,7 @@
         if (v.presences.some(x => x.pid === p.id)) return ok;
         if (!admin && p.id !== a.by && addedByMe() >= limit) return fail(limitMsg);
         v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now });
+        addFrozen(p.id);
         log('add', p.id);
         return ok;
       }
@@ -428,7 +441,7 @@
         const pres = v.presences.find(x => x.pid === a.pid);
         if (!pres) return ok;
         if (!admin && a.pid !== a.by && !(p && p.guest && pres.by === a.by)) return fail(p && p.guest ? 'Só quem trouxe o convidado pode tirar.' : 'Cada um só desmarca o próprio nome.');
-        if (locked && lk.reason !== 'notOpen') return fail(lockMsg);
+        if (locked && lk.reason !== 'notOpen' && lk.reason !== 'closed') return fail(lockMsg);
         const wasConfirmed = derive(v).confirmed.includes(a.pid);
         v.presences = v.presences.filter(x => x.pid !== a.pid);
         delete v.roles[a.pid];
@@ -462,6 +475,7 @@
         }
         if (v.presences.some(x => x.pid === p.id)) return fail(`${p.name} já está na lista.`);
         v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now });
+        addFrozen(p.id);
         log('add', p.id);
         return ok;
       }
