@@ -390,7 +390,7 @@
     const locked = lk.locked && !admin;
     const log = (act, pid) => { v.log.unshift({ ts: now, by: me ? me.id : null, act, pid: pid || null }); if (v.log.length > 300) v.log.length = 300; };
     const addedByMe = () => v.presences.filter(x => x.by === a.by && x.pid !== a.by).length;
-    const limitMsg = limit ? `Você já marcou ${limit} pessoa${limit > 1 ? 's' : ''} além de você. Esse é o limite.` : 'Cada um só pode marcar a si mesmo.';
+    const limitMsg = limit ? `Você já trouxe ${limit} convidado${limit > 1 ? 's' : ''}. Esse é o limite.` : 'Esse grupo não aceita convidados.';
     const isFixedHere = p => meta.fixed && p.fixed && canSee(meta, p);
 
     switch (a.type) {
@@ -403,6 +403,7 @@
           if (!admin && a.pid !== a.by) return fail('Só a própria pessoa ou um admin mexe na vaga da comissão.');
           v.out = v.out.filter(id => id !== p.id); log('add', p.id); return ok;
         }
+        if (!admin && p.id !== a.by && !p.guest) return fail('Cada um só marca o próprio nome.');
         if (locked) return fail(lockMsg);
         if (v.presences.some(x => x.pid === p.id)) return ok;
         if (!admin && p.id !== a.by && addedByMe() >= limit) return fail(limitMsg);
@@ -417,6 +418,9 @@
           if (!v.out.includes(p.id)) v.out.push(p.id);
           delete v.roles[a.pid]; log('remove', p.id); return ok;
         }
+        const pres = v.presences.find(x => x.pid === a.pid);
+        if (!pres) return ok;
+        if (!admin && a.pid !== a.by && !(p && p.guest && pres.by === a.by)) return fail(p && p.guest ? 'Só quem trouxe o convidado pode tirar.' : 'Cada um só desmarca o próprio nome.');
         if (locked && lk.reason !== 'notOpen') return fail(lockMsg);
         const before = v.presences.length;
         v.presences = v.presences.filter(x => x.pid !== a.pid);

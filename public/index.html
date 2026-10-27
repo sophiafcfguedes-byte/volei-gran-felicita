@@ -295,7 +295,7 @@ const Backend = {
     if (mode === 'demo') {
       if (a.type === 'login') return a.password === 'admin' ? { ok: true, token: 'demo' } : { ok: false, error: 'Senha incorreta. Na demonstração a senha é admin.' };
       const r = LG.apply(demo, a, { isAdmin: token === 'demo', now: Date.now() });
-      if (r.ok) store.set('demoState5', demo);
+      if (r.ok) store.set('demoState6', demo);
       return Object.assign(r, demoPayload());
     }
     const r = await fetch('api/action', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'x-admin-token': token } : {}), body: JSON.stringify(a) });
@@ -437,7 +437,8 @@ function renderWho() {
   const p = me && P(me);
   if (!p) return `<div class="card who"><div class="grow"><b>Quem é você?</b><div class="hint">Escolha seu nome pra fazer check-in.</div></div><button class="btn btn-primary" data-act="whoami">Escolher</button></div>`;
   const mine = S.presences.filter(x => x.by === me && x.pid !== me).length, lim = S.settings.guestLimit;
-  const sub = p.fixed && S.current && S.current.fixed ? 'Você tem vaga garantida da comissão' : lim ? `Você marcou ${mine} de ${lim} pessoa${lim > 1 ? 's' : ''} além de você` : 'Cada um faz o próprio check-in';
+  const allowG = !S.current || S.current.guests !== false;
+  const sub = p.fixed && S.current && S.current.fixed ? 'Você tem vaga garantida da comissão' : allowG && lim ? `Você só marca o seu nome · trouxe ${mine} de ${lim} convidado${lim > 1 ? 's' : ''}` : 'Você só marca e desmarca o seu nome';
   return `<div class="card who">${avatar(p)}<div class="grow"><b>${h(p.name)}</b><div class="hint">${sub}</div></div><button class="link" data-act="whoami">Trocar</button></div>`;
 }
 
@@ -452,12 +453,14 @@ function renderLista() {
   D.regular.forEach((id, i) => pos[id] = `<span class="pos">${i + 1}º</span>`);
   D.waitlist.forEach((id, i) => pos[id] = `<span class="pos wait">espera ${i + 1}</span>`);
   const edit = canEdit();
+  const allowGuests = !S.current || S.current.guests !== false;
   const row = p => {
-    const on = !!pos[p.id], can = fxHere(p) ? canEditFixed(p) : edit;
+    const pres = S.presences.find(x => x.pid === p.id);
+    const mine = isAdmin || p.id === me || (p.guest && allowGuests && (!pres || pres.by === me));
+    const on = !!pos[p.id], can = fxHere(p) ? canEditFixed(p) : edit && mine;
     return `<label class="row${on ? ' on' : ''}" data-n="${h(norm(p.name))}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${can ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${p.paid ? '<span class="paid">pago</span>' : ''}${pos[p.id] || (fxHere(p) ? '<span class="pos wait">não vai</span>' : '')}</label>`;
   };
   const section = (title, list) => list.length ? `<div class="card" data-sec><div class="sec-h"><h2>${title}</h2><span class="muted">${list.filter(p => pos[p.id]).length} de ${list.length}</span></div><div class="list">${list.map(row).join('')}</div></div>` : '';
-  const allowGuests = !S.current || S.current.guests !== false;
   const guests = S.players.filter(p => p.guest && (allowGuests || pos[p.id])).sort((a, b) => (pos[b.id] ? 1 : 0) - (pos[a.id] ? 1 : 0) || byName(a, b));
   const lk = LG.lockInfo(S, now());
   let lockMsg = '';
@@ -466,7 +469,7 @@ function renderLista() {
   const prio = S.settings.paidPriority;
   const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} ${p.paid ? '<span class="paid">pago</span>' : ''}</span>${by || t}</li>`; };
   return `${demoNote}${renderWho()}${lockMsg}
-    <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir.</p>
+    <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir. Cada um só marca e desmarca o próprio nome.</p>
     <div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
     ${section('Mulheres', members.filter(p => p.gender === 'F'))}
     ${section('Homens', members.filter(p => p.gender !== 'F'))}
@@ -545,7 +548,7 @@ function renderMais() {
       <li>As vagas vão por ordem de check-in.</li>
       ${st.paidPriority ? '<li>Quem pagou a vaquinha passa na frente de quem não pagou.</li>' : ''}
       <li>Passou das vagas, entra na lista de espera, que sobe sozinha quando alguém desiste.</li>
-      <li>${st.guestLimit ? `Cada pessoa faz o próprio check-in e pode marcar até ${st.guestLimit} outra${st.guestLimit > 1 ? 's' : ''} (incluindo convidados).` : 'Cada pessoa faz o próprio check-in.'} Tirar não tem limite.</li>
+      <li>Cada pessoa só marca e desmarca o próprio nome.${st.guestLimit ? ` Nos jogos que aceitam convidados, cada um pode trazer até ${st.guestLimit}, e só quem trouxe pode tirar.` : ''}</li>
       <li>Quando o jogo acaba, a lista zera sozinha e já mostra o próximo jogo. Quem estava confirmado ganha +1 na frequência.</li>
       <li>O sorteio monta ${st.teams || 4} times equilibrando homens, mulheres e nível. O nível de cada um só o admin vê.</li>
     </ul></details></div>`;
@@ -575,7 +578,7 @@ function renderMais() {
 
     <div class="card"><h2>Admin · Regras gerais</h2>
       <div class="field"><label for="s-group">Nome do grupo</label><input type="text" id="s-group" value="${h(st.groupName)}"></div>
-      <div class="field"><label for="s-limit">Quantas pessoas cada um pode marcar além de si</label><input type="number" id="s-limit" min="0" max="10" value="${st.guestLimit}"></div>
+      <div class="field"><label for="s-limit">Quantos convidados cada um pode trazer</label><input type="number" id="s-limit" min="0" max="10" value="${st.guestLimit}"></div>
       <p class="hint">Vagas e número de times de cada jogo ficam em <b>Dias de jogo</b>, acima.</p>
       <label class="check"><input type="checkbox" id="s-prio"${st.paidPriority ? ' checked' : ''}> Quem pagou a vaquinha passa na frente</label>
       <button class="btn btn-primary" data-act="save-settings">Salvar</button></div>
@@ -744,7 +747,7 @@ function applyTheme() {
 async function boot() {
   applyTheme();
   try { applyPayload(await Backend.load()); }
-  catch (e) { mode = 'demo'; demo = store.get('demoState5', null) || seedDemo(); store.set('demoState5', demo); applyPayload(demoPayload()); }
+  catch (e) { mode = 'demo'; demo = store.get('demoState6', null) || seedDemo(); store.set('demoState6', demo); applyPayload(demoPayload()); }
   render();
   if (mode === 'server') { setInterval(poll, 8000); document.addEventListener('visibilitychange', poll); }
   setInterval(() => { if (S) { const lk = JSON.stringify(LG.lockInfo(S, now())); if (lk !== boot.lk) { boot.lk = lk; render(); } } }, 30000);
