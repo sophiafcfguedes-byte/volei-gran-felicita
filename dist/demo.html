@@ -266,14 +266,14 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   const DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
   const DAYS_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
   const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-  const SETTINGS_VERSION = 3;
+  const SETTINGS_VERSION = 4;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
     'lockNow', 'unlock', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
-  const WED = { day: 3, start: '19:00', end: '22:00', openDay: 2, openTime: '12:00', max: 15, teams: 3, private: true, fixed: false };
+  const WED = { day: 3, start: '19:00', end: '22:00', openDay: 2, openTime: '12:00', max: 15, teams: 2, private: true, fixed: false };
   function defaultSettings() {
     return {
       v: SETTINGS_VERSION,
@@ -356,7 +356,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     const init = initialState();
     for (const k of Object.keys(init)) if (s[k] === undefined) s[k] = init[k];
     const st = s.settings || {};
-    if (st.v !== SETTINGS_VERSION) {
+    if (!st.v || st.v < 3) {
       const fresh = defaultSettings();
       if (Array.isArray(st.schedule) && st.schedule.length) {
         fresh.schedule = st.schedule.map(g => Object.assign({ max: Number(st.max) || 24, teams: Number(st.teams) || 4, private: false, fixed: true }, g));
@@ -373,6 +373,12 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       }
       ['current', 'presences', 'out', 'roles', 'teams', 'log'].forEach(k => delete s[k]);
     }
+    if (s.settings.v === 3) {
+      /* v4: quarta passa a ter 2 times (8 e 7). */
+      s.settings.schedule.forEach(g => { if (g.day === 3 && g.private && Number(g.teams) === 3) g.teams = 2; });
+      for (const g of Object.values(s.games)) if (g.meta && g.meta.day === 3 && g.meta.private && g.meta.teams === 3) g.meta.teams = 2;
+    }
+    s.settings.v = SETTINGS_VERSION;
     const act = activeGames(s, now);
     const ids = new Set(act.map(g => g.id));
     for (const id of Object.keys(s.games)) {
