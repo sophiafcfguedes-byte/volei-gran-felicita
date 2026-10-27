@@ -144,6 +144,10 @@
       const g = s.games[meta.id];
       if (!g.frozen && now >= meta.cutoffAt) g.frozen = derive(view(s, meta.id)).confirmed.slice();
     }
+    /* Convidado não fica no cadastro: some quando não está em nenhuma lista aberta. */
+    const used = new Set();
+    for (const g of Object.values(s.games)) g.presences.forEach(x => used.add(x.pid));
+    s.players = s.players.filter(p => !p.guest || used.has(p.id));
     return s;
   }
 
@@ -511,13 +515,14 @@
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva o nome do convidado.');
+        if (name.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
         if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero do convidado.');
         if (!admin && addedByMe() >= limit) return fail(limitMsg);
         if (me && fold(name) === fold(me.name)) return fail('Esse é o seu nome. Se o convidado for outra pessoa, coloque o sobrenome dele.');
         let p = s.players.find(x => fold(x.name) === fold(name));
         if (p && !p.guest) return fail(`Já tem ${p.name} no grupo. Se o convidado for outra pessoa, coloque o sobrenome dele.`);
         if (!p) {
-          p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0 };
+          p = { id: newId(s, 'c'), name, gender: a.gender, skill: admin && a.skill ? clampSkill(a.skill) : 3, paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0 };
           s.players.push(p);
           v.players = s.players;
         }

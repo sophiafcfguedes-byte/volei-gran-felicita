@@ -300,7 +300,7 @@ const Backend = {
     if (mode === 'demo') {
       if (a.type === 'login') return a.password === 'admin' ? { ok: true, token: 'demo' } : { ok: false, error: 'Senha incorreta. Na demonstração a senha é admin.' };
       const r = LG.apply(demo, a, { isAdmin: token === 'demo', now: Date.now() });
-      if (r.ok) store.set('demoState10', demo);
+      if (r.ok) store.set('demoState11', demo);
       return Object.assign(r, demoPayload());
     }
     const r = await fetch('api/action', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'x-admin-token': token } : {}), body: JSON.stringify(a) });
@@ -315,7 +315,7 @@ function seedDemo() {
   const PRIV = new Set(['Sophia', 'Fábio', 'Ana', 'Duda', 'Lara', 'Marina', 'André', 'Caio', 'Felipe', 'João', 'Mateus', 'Otávio', 'Vitor', 'Bruno', 'Igor', 'Carla']);
   const add = (name, g, sk, guest) => { const id = 'd' + (s.seq++); s.players.push({ id, name, gender: g, skill: sk, paid: !guest && Math.random() < .5, guest: !!guest, fixed: name === 'Sophia' || name === 'Fábio', priv: PRIV.has(name), pin: guest ? undefined : '123A', photo: null, freq: guest ? 0 : Math.floor(Math.random() * 25) }); return id; };
   F.forEach(([n, k]) => add(n, 'F', k)); M.forEach(([n, k]) => add(n, 'M', k));
-  const g1 = add('Pedro', 'M', 3, true), g2 = add('Sofia', 'F', 2, true);
+  const g1 = add('Pedro Lima', 'M', 3, true), g2 = add('Sofia Reis', 'F', 2, true);
   LG.normalize(s, Date.now());
   for (const g of Object.values(s.games)) {
     const ids = s.players.filter(p => !p.guest && !(g.meta.fixed && p.fixed) && (!g.meta.private || p.priv)).map(p => p.id);
@@ -491,9 +491,9 @@ function renderLista() {
     ${section('Homens', members.filter(p => p.gender !== 'F'))}
     ${section('Convidados', guests)}
     ${edit && allowGuests && S.settings.guestLimit ? `<div class="card"><h2>Trazer um convidado</h2>
-      <div class="field"><label for="g-name">Nome</label><input type="text" id="g-name" maxlength="40" autocomplete="off" placeholder="Nome do convidado"></div>
+      <div class="field"><label for="g-name">Nome e sobrenome</label><input type="text" id="g-name" maxlength="40" autocomplete="off" placeholder="Nome e sobrenome"></div>
       <div class="grid2"><div class="field"><label for="g-gender">Gênero</label><select id="g-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
-      <div class="field"><label for="g-skill">Nível</label><select id="g-skill">${opts(SKILLS, 3)}</select></div></div>
+      ${isAdmin ? `<div class="field"><label for="g-skill">Nível</label><select id="g-skill">${opts(SKILLS, 3)}</select></div>` : ''}</div>
       <button class="btn btn-primary" data-act="addGuest">Adicionar convidado</button></div>` : ''}
     <div class="card"><div class="sec-h"><h2>Confirmados</h2><span class="muted">${D.confirmed.length}/${S.settings.max}</span></div>
       ${D.fixed.length ? `<ul class="conf fx">${D.fixed.map(id => `<li>${avatar(P(id))}<span class="nm">${h(nameOf(P(id)))}</span><span class="by">vaga garantida</span></li>`).join('')}</ul>` : ''}
@@ -760,7 +760,7 @@ document.addEventListener('click', async e => {
     case 'bulk-add': return act({ type: 'bulkAdd', text: val('bulk-text'), gender: val('bulk-gender'), priv: document.getElementById('bulk-priv').checked }, null, ['bulk-text']).then(ok => { if (ok && lastResult && lastResult.added != null) toast(`${lastResult.added} cadastrado${lastResult.added === 1 ? '' : 's'}${lastResult.skipped ? `, ${lastResult.skipped} já existia${lastResult.skipped === 1 ? '' : 'm'}` : ''}.`); });
     case 'close-sheet': confirmFn = null; return closeSheet();
     case 'confirm-yes': { const f = confirmFn; confirmFn = null; closeSheet(); if (f) await f(); return; }
-    case 'addGuest': return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill') }, 'Convidado adicionado.', ['g-name']);
+    case 'addGuest': return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: isAdmin ? val('g-skill') : undefined }, 'Convidado adicionado.', ['g-name']);
     case 'draw': return act({ type: 'draw' }, 'Times sorteados!');
     case 'photo-del': return act({ type: 'photo', pid: me, photo: null }, 'Foto removida.');
     case 'sug-anon': return act({ type: 'suggest', text: val('sug-text'), anon: true }, 'Sugestão enviada. Obrigado!', ['sug-text']);
@@ -821,7 +821,7 @@ function applyTheme() {
 async function boot() {
   applyTheme();
   try { applyPayload(await Backend.load()); }
-  catch (e) { mode = 'demo'; demo = store.get('demoState10', null) || seedDemo(); store.set('demoState10', demo); applyPayload(demoPayload()); }
+  catch (e) { mode = 'demo'; demo = store.get('demoState11', null) || seedDemo(); store.set('demoState11', demo); applyPayload(demoPayload()); }
   render();
   if (mode === 'server') { setInterval(poll, 8000); document.addEventListener('visibilitychange', poll); }
   setInterval(() => { if (S) { const lk = JSON.stringify(LG.lockInfo(S, now())); if (lk !== boot.lk) { boot.lk = lk; render(); } } }, 30000);
