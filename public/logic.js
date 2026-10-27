@@ -522,7 +522,7 @@
         let p = s.players.find(x => fold(x.name) === fold(name));
         if (p && !p.guest) return fail(`Já tem ${p.name} no grupo. Se o convidado for outra pessoa, coloque o sobrenome dele.`);
         if (!p) {
-          p = { id: newId(s, 'c'), name, gender: a.gender, skill: admin && a.skill ? clampSkill(a.skill) : 3, paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0 };
+          p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0 };
           s.players.push(p);
           v.players = s.players;
         }

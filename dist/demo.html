@@ -784,7 +784,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         let p = s.players.find(x => fold(x.name) === fold(name));
         if (p && !p.guest) return fail(`Já tem ${p.name} no grupo. Se o convidado for outra pessoa, coloque o sobrenome dele.`);
         if (!p) {
-          p = { id: newId(s, 'c'), name, gender: a.gender, skill: admin && a.skill ? clampSkill(a.skill) : 3, paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0 };
+          p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0 };
           s.players.push(p);
           v.players = s.players;
         }
@@ -1091,7 +1091,7 @@ function renderLista() {
     ${edit && allowGuests && S.settings.guestLimit ? `<div class="card"><h2>Trazer um convidado</h2>
       <div class="field"><label for="g-name">Nome e sobrenome</label><input type="text" id="g-name" maxlength="40" autocomplete="off" placeholder="Nome e sobrenome"></div>
       <div class="grid2"><div class="field"><label for="g-gender">Gênero</label><select id="g-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
-      ${isAdmin ? `<div class="field"><label for="g-skill">Nível</label><select id="g-skill">${opts(SKILLS, 3)}</select></div>` : ''}</div>
+      <div class="field"><label for="g-skill">Nível</label><select id="g-skill">${opts(SKILLS, 3)}</select></div></div>
       <button class="btn btn-primary" data-act="addGuest">Adicionar convidado</button></div>` : ''}
     <div class="card"><div class="sec-h"><h2>Confirmados</h2><span class="muted">${D.confirmed.length}/${S.settings.max}</span></div>
       ${D.fixed.length ? `<ul class="conf fx">${D.fixed.map(id => `<li>${avatar(P(id))}<span class="nm">${h(nameOf(P(id)))}</span><span class="by">vaga garantida</span></li>`).join('')}</ul>` : ''}
@@ -1358,7 +1358,7 @@ document.addEventListener('click', async e => {
     case 'bulk-add': return act({ type: 'bulkAdd', text: val('bulk-text'), gender: val('bulk-gender'), priv: document.getElementById('bulk-priv').checked }, null, ['bulk-text']).then(ok => { if (ok && lastResult && lastResult.added != null) toast(`${lastResult.added} cadastrado${lastResult.added === 1 ? '' : 's'}${lastResult.skipped ? `, ${lastResult.skipped} já existia${lastResult.skipped === 1 ? '' : 'm'}` : ''}.`); });
     case 'close-sheet': confirmFn = null; return closeSheet();
     case 'confirm-yes': { const f = confirmFn; confirmFn = null; closeSheet(); if (f) await f(); return; }
-    case 'addGuest': return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: isAdmin ? val('g-skill') : undefined }, 'Convidado adicionado.', ['g-name']);
+    case 'addGuest': return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill') }, 'Convidado adicionado.', ['g-name']);
     case 'draw': return act({ type: 'draw' }, 'Times sorteados!');
     case 'photo-del': return act({ type: 'photo', pid: me, photo: null }, 'Foto removida.');
     case 'sug-anon': return act({ type: 'suggest', text: val('sug-text'), anon: true }, 'Sugestão enviada. Obrigado!', ['sug-text']);
