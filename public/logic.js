@@ -1,4 +1,6 @@
-/* Regras do app Vôlei Gran Felicitá — usado pelo servidor (Netlify/Node) e pelo navegador (modo demo). */
+/* Regras do app Vôlei Gran Felicitá — usado pelo servidor (Netlify/Node) e pelo navegador (modo demo).
+   Cada dia de jogo configurado tem a sua própria lista. Jogos "fechados" só aparecem
+   para quem tem a bolinha (player.priv). */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.VoleiLogic = factory();
@@ -6,30 +8,30 @@
   const DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
   const DAYS_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
   const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-  const SETTINGS_VERSION = 2;
+  const SETTINGS_VERSION = 3;
   const ADMIN_ONLY = new Set([
-    'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'settings', 'schedule', 'lockNow', 'unlock',
-    'resetPresences', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
+    'lockNow', 'unlock', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
+  const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
+  const WED = { day: 3, start: '19:00', end: '22:00', openDay: 2, openTime: '12:00', max: 15, teams: 3, private: true, fixed: false };
   function defaultSettings() {
     return {
       v: SETTINGS_VERSION,
       groupName: 'Vôlei Gran Felicitá',
-      max: 24, teams: 4, perTeam: 6, guestLimit: 3, paidPriority: false,
+      guestLimit: 3, paidPriority: false,
       schedule: [
-        { day: 1, start: '19:00', end: '22:00', openDay: 0, openTime: '12:00' },
-        { day: 4, start: '19:00', end: '22:00', openDay: 3, openTime: '12:00' }
+        { day: 1, start: '19:00', end: '22:00', openDay: 0, openTime: '12:00', max: 24, teams: 4, private: false, fixed: true },
+        Object.assign({}, WED),
+        { day: 4, start: '19:00', end: '22:00', openDay: 3, openTime: '12:00', max: 24, teams: 4, private: false, fixed: true }
       ],
       manualLockUntil: 0
     };
   }
 
   function initialState() {
-    return {
-      settings: defaultSettings(), current: null,
-      players: [], presences: [], out: [], roles: {}, teams: null, log: [], suggestions: [], history: [], seq: 1
-    };
+    return { settings: defaultSettings(), players: [], games: {}, suggestions: [], history: [], seq: 1 };
   }
 
   function newId(s, prefix) {
@@ -44,26 +46,26 @@
   const spTs = (y, m, d, hhmm) => Date.UTC(y, m, d, 0, toMins(hhmm)) - SP;
   const isoDate = (y, m, d) => new Date(Date.UTC(y, m, d)).toISOString().slice(0, 10);
 
-  /* O próximo jogo que ainda não terminou, com o horário em que o check-in abre. */
-  function activeGame(s, now) {
-    const sched = (s.settings.schedule || []).filter(g => g && g.day >= 0 && g.day <= 6);
-    const t = spParts(now);
-    let best = null;
-    for (let k = 0; k <= 7; k++) {
-      const base = new Date(Date.UTC(t.y, t.m, t.d + k));
-      const y = base.getUTCFullYear(), m = base.getUTCMonth(), d = base.getUTCDate(), wd = base.getUTCDay();
-      for (const g of sched) {
-        if (g.day !== wd) continue;
+  /* A próxima data de cada dia de jogo que ainda não terminou. */
+  function activeGames(s, now) {
+    const t = spParts(now), out = [];
+    for (const g of s.settings.schedule || []) {
+      for (let k = 0; k <= 7; k++) {
+        const base = new Date(Date.UTC(t.y, t.m, t.d + k));
+        const y = base.getUTCFullYear(), m = base.getUTCMonth(), d = base.getUTCDate();
+        if (base.getUTCDay() !== g.day) continue;
         const startAt = spTs(y, m, d, g.start), endAt = spTs(y, m, d, g.end);
         if (endAt <= now) continue;
         const before = ((g.day - g.openDay) % 7 + 7) % 7;
-        const openAt = spTs(y, m, d - before, g.openTime);
-        const cand = { id: isoDate(y, m, d), day: wd, start: g.start, end: g.end, startAt, endAt, openAt, openDay: g.openDay, openTime: g.openTime };
-        if (!best || cand.startAt < best.startAt) best = cand;
+        out.push({
+          id: isoDate(y, m, d), day: g.day, start: g.start, end: g.end, startAt, endAt,
+          openAt: spTs(y, m, d - before, g.openTime), openDay: g.openDay, openTime: g.openTime,
+          max: Number(g.max) || 24, teams: Number(g.teams) || 4, private: !!g.private, fixed: g.fixed !== false
+        });
+        break;
       }
-      if (best) break;
     }
-    return best;
+    return out.sort((a, b) => a.startAt - b.startAt);
   }
 
   function gameTitle(g) { return g ? `Vôlei de ${DAYS[g.day].toLowerCase()}` : 'Sem jogo marcado'; }
@@ -73,55 +75,94 @@
     return `${DAYS_SHORT[g.day]}, ${p.d} de ${MONTHS[p.m]} · ${g.start}–${g.end}`;
   }
 
-  /* Ajusta estados antigos e vira o jogo quando o anterior já acabou.
-     Quem estava confirmado no jogo que acabou ganha +1 na frequência. */
+  const emptyGame = meta => ({ meta, presences: [], out: [], roles: {}, teams: null, log: [] });
+
+  /* Uma "visão" de um jogo no formato que as regras usam. Os arrays são os do jogo. */
+  function view(s, id) {
+    const g = s.games[id];
+    if (!g) return null;
+    return {
+      settings: Object.assign({}, s.settings, { max: g.meta.max, teams: g.meta.teams }),
+      players: s.players, current: g.meta,
+      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log
+    };
+  }
+  function writeBack(s, id, v) {
+    const g = s.games[id];
+    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log;
+  }
+
+  /* Ajusta estados antigos, fecha jogos que já acabaram (+1 na frequência
+     de quem estava confirmado) e abre a lista dos próximos. */
   function normalize(s, now) {
     const init = initialState();
     for (const k of Object.keys(init)) if (s[k] === undefined) s[k] = init[k];
-    if (!s.settings || s.settings.v !== SETTINGS_VERSION) {
-      const old = s.settings || {};
-      s.settings = Object.assign(defaultSettings(), { groupName: old.groupName || 'Vôlei Gran Felicitá', perTeam: old.perTeam || 6, guestLimit: old.guestLimit != null ? old.guestLimit : 3 });
+    const st = s.settings || {};
+    if (st.v !== SETTINGS_VERSION) {
+      const fresh = defaultSettings();
+      if (Array.isArray(st.schedule) && st.schedule.length) {
+        fresh.schedule = st.schedule.map(g => Object.assign({ max: Number(st.max) || 24, teams: Number(st.teams) || 4, private: false, fixed: true }, g));
+        if (!fresh.schedule.some(g => g.day === 3)) fresh.schedule.push(Object.assign({}, WED));
+        fresh.schedule.sort((a, b) => a.day - b.day);
+      }
+      fresh.groupName = st.groupName || fresh.groupName;
+      if (st.guestLimit != null) fresh.guestLimit = st.guestLimit;
+      fresh.paidPriority = !!st.paidPriority;
+      s.settings = fresh;
+      if (s.current && s.current.id) {
+        const meta = Object.assign({ max: Number(st.max) || 24, teams: Number(st.teams) || 4, private: false, fixed: true }, s.current);
+        s.games[s.current.id] = { meta, presences: s.presences || [], out: s.out || [], roles: s.roles || {}, teams: s.teams || null, log: s.log || [] };
+      }
+      ['current', 'presences', 'out', 'roles', 'teams', 'log'].forEach(k => delete s[k]);
     }
-    if (s.settings.teams === undefined) s.settings.teams = 4;
-    const g = activeGame(s, now);
-    const id = g ? g.id : null;
-    if (!s.current || s.current.id !== id) {
-      if (s.current && (s.presences.length || s.players.some(p => p.fixed))) finishGame(s);
-      s.presences = []; s.out = []; s.roles = {}; s.teams = null; s.log = [];
+    const act = activeGames(s, now);
+    const ids = new Set(act.map(g => g.id));
+    for (const id of Object.keys(s.games)) {
+      if (ids.has(id)) continue;
+      const g = s.games[id];
+      if (g.meta && now >= g.meta.endAt) finishGame(s, id);
+      delete s.games[id];
     }
-    s.current = g;
+    for (const meta of act) {
+      if (!s.games[meta.id]) s.games[meta.id] = emptyGame(meta);
+      else s.games[meta.id].meta = meta;
+    }
     return s;
   }
 
-  function finishGame(s) {
-    const d = derive(s);
+  function finishGame(s, id) {
+    const v = view(s, id);
+    if (!v) return;
+    const d = derive(v);
     const pm = playerMap(s);
-    d.confirmed.forEach(id => { if (pm[id]) pm[id].freq = (pm[id].freq || 0) + 1; });
-    s.history.unshift({ id: s.current ? s.current.id : null, confirmed: d.confirmed });
-    if (s.history.length > 60) s.history.length = 60;
+    d.confirmed.forEach(pid => { if (pm[pid]) pm[pid].freq = (pm[pid].freq || 0) + 1; });
+    s.history.unshift({ id, confirmed: d.confirmed });
+    if (s.history.length > 90) s.history.length = 90;
   }
 
-  function lockInfo(s, now) {
-    const st = s.settings, g = s.current;
+  function lockInfo(v, now) {
+    const g = v && v.current;
     if (!g) return { locked: true, reason: 'noGame' };
-    if (st.manualLockUntil && st.manualLockUntil > now) return { locked: true, reason: 'manual', until: st.manualLockUntil };
+    if (v.settings.manualLockUntil && v.settings.manualLockUntil > now) return { locked: true, reason: 'manual', until: v.settings.manualLockUntil };
     if (now < g.openAt) return { locked: true, reason: 'notOpen', opensAt: g.openAt };
     return { locked: false };
   }
 
   const playerMap = s => Object.fromEntries(s.players.map(p => [p.id, p]));
+  const canSee = (meta, p) => !meta.private || !!(p && p.priv);
 
-  /* Comissão (vaga garantida) entra primeiro; o resto por ordem de check-in
-     (ou quem pagou a vaquinha primeiro, se essa opção estiver ligada). */
-  function derive(s) {
-    const pm = playerMap(s);
-    const outSet = new Set(s.out || []);
-    const fixed = s.players.filter(p => p.fixed && !outSet.has(p.id)).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(p => p.id);
-    const prio = !!s.settings.paidPriority;
-    const ordered = s.presences.filter(x => pm[x.pid] && !pm[x.pid].fixed).slice()
+  /* Comissão (vaga garantida, se o jogo tiver) entra primeiro; o resto por ordem de
+     check-in (ou quem pagou a vaquinha primeiro, se essa opção estiver ligada). */
+  function derive(v) {
+    if (!v || !v.current) return { fixed: [], ordered: [], open: 0, regular: [], confirmed: [], waitlist: [] };
+    const meta = v.current, pm = playerMap(v);
+    const outSet = new Set(v.out || []);
+    const isFixedHere = p => meta.fixed && p.fixed && canSee(meta, p);
+    const fixed = v.players.filter(p => isFixedHere(p) && !outSet.has(p.id)).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(p => p.id);
+    const prio = !!v.settings.paidPriority;
+    const ordered = v.presences.filter(x => pm[x.pid] && !isFixedHere(pm[x.pid])).slice()
       .sort((a, b) => (prio ? (pm[b.pid].paid ? 1 : 0) - (pm[a.pid].paid ? 1 : 0) : 0) || a.ts - b.ts);
-    const max = Number(s.settings.max) || 24;
-    const open = Math.max(0, max - fixed.length);
+    const open = Math.max(0, (Number(meta.max) || 24) - fixed.length);
     return {
       fixed, ordered, open,
       regular: ordered.slice(0, open).map(x => x.pid),
@@ -135,17 +176,17 @@
     return arr;
   }
 
-  /* Times equilibrados: espalha levantadores, depois mulheres, depois homens,
-     sempre no time com menos daquele tipo e menor soma de nível; depois troca
-     pares do mesmo perfil entre times enquanto a diferença de nível cair. */
-  function drawTeams(s, ids, rand) {
+  /* Times equilibrados: espalha mulheres e homens pelo nível, sempre no time com
+     menos daquele tipo e menor soma; depois troca pares do mesmo gênero enquanto
+     a diferença de nível entre os times cair. */
+  function drawTeams(v, ids, rand) {
     rand = rand || Math.random;
-    const pm = playerMap(s);
+    const pm = playerMap(v);
     const n = ids.length;
-    const k = Math.max(2, Math.min(Math.floor(n / 2), Number(s.settings.teams) || 4));
+    const k = Math.max(2, Math.min(Math.floor(n / 2), Number(v.settings.teams) || 4));
     const cap = Math.ceil(n / k);
     const P = shuffle(ids.map(id => {
-      const p = pm[id], r = s.roles[id] || {};
+      const p = pm[id], r = v.roles[id] || {};
       return { id, g: p.gender === 'F' ? 'F' : 'M', sk: Number(p.skill) || 3, st: !!r.setter };
     }), rand);
     const bySkill = arr => arr.sort((a, b) => b.sk - a.sk);
@@ -162,7 +203,7 @@
       const t = open[0];
       t.m.push(x); t.sum += x.sk; if (x.st) t.st++; if (x.g === 'F') t.f++;
     }
-    const spread = () => { const v = T.map(t => t.sum); return Math.max(...v) - Math.min(...v); };
+    const spread = () => { const vals = T.map(t => t.sum); return Math.max(...vals) - Math.min(...vals); };
     for (let it = 0; it < 600; it++) {
       const a = T[Math.floor(rand() * k)], b = T[Math.floor(rand() * k)];
       if (a === b || !a.m.length || !b.m.length) continue;
@@ -187,66 +228,23 @@
     const ok = { ok: true };
     const pm = playerMap(s);
     const me = a.by ? pm[a.by] : null;
-    const lk = lockInfo(s, now);
-    const lockMsg = lk.reason === 'notOpen' ? 'O check-in ainda não abriu.' : lk.reason === 'noGame' ? 'Não tem jogo marcado.' : 'A lista está fechada agora.';
-    const locked = lk.locked && !admin;
-    const log = (act, pid) => {
-      s.log.unshift({ ts: now, by: me ? me.id : null, act, pid: pid || null });
-      if (s.log.length > 300) s.log.length = 300;
-    };
-    const addedByMe = () => s.presences.filter(x => x.by === a.by && x.pid !== a.by).length;
     const limit = Number(s.settings.guestLimit) || 0;
 
     if (ADMIN_ONLY.has(a.type) && !admin) return fail('Só quem é admin pode fazer isso.');
     if (!ADMIN_ONLY.has(a.type) && !me && !admin && a.type !== 'suggest' && a.type !== 'register') return fail('Escolha quem você é antes (no topo da lista).');
 
+    /* ---------- ações de um jogo ---------- */
+    if (GAME_ACTIONS.has(a.type)) {
+      const v = view(s, a.game);
+      if (!v) return fail('Esse jogo não está mais aberto. Recarregue a página.');
+      const meta = v.current;
+      if (meta.private && !admin && !canSee(meta, me)) return fail('Esse jogo é só pra quem foi liberado.');
+      const r = gameAction(s, v, a, { now, admin, me, limit, pm, rand: ctx.rand });
+      writeBack(s, a.game, v);
+      return r;
+    }
+
     switch (a.type) {
-      case 'join': {
-        const p = pm[a.pid];
-        if (!p) return fail('Jogador não encontrado.');
-        if (p.fixed) {
-          if (!admin && a.pid !== a.by) return fail('Só a própria pessoa ou um admin mexe na vaga da comissão.');
-          s.out = (s.out || []).filter(id => id !== p.id); log('add', p.id); return ok;
-        }
-        if (locked) return fail(lockMsg);
-        if (s.presences.some(x => x.pid === p.id)) return ok;
-        if (!admin && p.id !== a.by && addedByMe() >= limit) return fail(limit ? `Você já marcou ${limit} pessoa${limit > 1 ? 's' : ''} além de você. Esse é o limite.` : 'Cada um só pode marcar a si mesmo.');
-        s.presences.push({ pid: p.id, by: me ? me.id : null, ts: now });
-        log('add', p.id);
-        return ok;
-      }
-      case 'leave': {
-        const p = pm[a.pid];
-        if (p && p.fixed) {
-          if (!admin && a.pid !== a.by) return fail('Só a própria pessoa ou um admin mexe na vaga da comissão.');
-          if (!s.out.includes(p.id)) s.out.push(p.id);
-          delete s.roles[a.pid]; log('remove', p.id); return ok;
-        }
-        if (locked && lk.reason !== 'notOpen') return fail(lockMsg);
-        const before = s.presences.length;
-        s.presences = s.presences.filter(x => x.pid !== a.pid);
-        if (s.presences.length === before) return ok;
-        delete s.roles[a.pid];
-        log('remove', a.pid);
-        return ok;
-      }
-      case 'addGuest': {
-        if (locked) return fail(lockMsg);
-        const name = cleanName(a.name);
-        if (name.length < 2) return fail('Escreva o nome do convidado.');
-        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero do convidado.');
-        if (!admin && addedByMe() >= limit) return fail(limit ? `Você já marcou ${limit} pessoa${limit > 1 ? 's' : ''} além de você. Esse é o limite.` : 'Cada um só pode marcar a si mesmo.');
-        let p = s.players.find(x => x.name.toLowerCase() === name.toLowerCase());
-        if (p && !p.guest) return fail(`${p.name} já está no grupo. Marque na lista.`);
-        if (!p) {
-          p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, fixed: false, photo: null, freq: 0 };
-          s.players.push(p);
-        }
-        if (s.presences.some(x => x.pid === p.id)) return fail(`${p.name} já está na lista.`);
-        s.presences.push({ pid: p.id, by: me ? me.id : null, ts: now });
-        log('add', p.id);
-        return ok;
-      }
       case 'register': {
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva seu nome.');
@@ -255,37 +253,8 @@
         let p = s.players.find(x => x.name.toLowerCase() === name.toLowerCase());
         if (p && !p.guest) return fail(`Já tem alguém chamado ${p.name}. Procure na lista, ou use um sobrenome.`);
         if (p) { p.guest = false; p.gender = a.gender; }
-        else { p = { id: newId(s, 'p'), name, gender: a.gender, skill: 3, paid: false, guest: false, fixed: false, photo: null, freq: 0 }; s.players.push(p); }
+        else { p = { id: newId(s, 'p'), name, gender: a.gender, skill: 3, paid: false, guest: false, fixed: false, priv: false, photo: null, freq: 0 }; s.players.push(p); }
         return { ok: true, id: p.id };
-      }
-      case 'bulkAdd': {
-        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero de quem está na lista.');
-        const lines = String(a.text || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean).slice(0, 200);
-        if (!lines.length) return fail('Cole pelo menos um nome.');
-        let added = 0, skipped = 0;
-        for (const line of lines) {
-          const m = line.replace(/^[-•*\d.)\s]+(?=\D)/, '').match(/^(.*?)(?:\s+([1-5]))?$/);
-          const name = cleanName(m ? m[1] : line);
-          if (name.length < 2) continue;
-          if (s.players.some(x => x.name.toLowerCase() === name.toLowerCase())) { skipped++; continue; }
-          s.players.push({ id: newId(s, 'p'), name, gender: a.gender, skill: m && m[2] ? Number(m[2]) : 3, paid: false, guest: false, fixed: false, photo: null, freq: 0 });
-          added++;
-        }
-        return { ok: true, added, skipped };
-      }
-      case 'role': {
-        if (!['setter', 'late'].includes(a.role) || !pm[a.pid]) return fail('Ação inválida.');
-        const r = s.roles[a.pid] || {};
-        r[a.role] = !r[a.role];
-        s.roles[a.pid] = r;
-        return ok;
-      }
-      case 'draw': {
-        const d = derive(s);
-        if (d.confirmed.length < 4) return fail('Precisa de pelo menos 4 confirmados pra sortear.');
-        s.teams = { ts: now, by: me ? me.id : null, list: drawTeams(s, d.confirmed, ctx.rand) };
-        log('draw');
-        return ok;
       }
       case 'photo': {
         if (!admin && a.pid !== a.by) return fail('Você só pode trocar a sua própria foto.');
@@ -305,6 +274,21 @@
       }
 
       /* ---------- admin ---------- */
+      case 'bulkAdd': {
+        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero de quem está na lista.');
+        const lines = String(a.text || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean).slice(0, 200);
+        if (!lines.length) return fail('Cole pelo menos um nome.');
+        let added = 0, skipped = 0;
+        for (const line of lines) {
+          const m = line.replace(/^[-•*\d.)\s]+(?=\D)/, '').match(/^(.*?)(?:\s+([1-5]))?$/);
+          const name = cleanName(m ? m[1] : line);
+          if (name.length < 2) continue;
+          if (s.players.some(x => x.name.toLowerCase() === name.toLowerCase())) { skipped++; continue; }
+          s.players.push({ id: newId(s, 'p'), name, gender: a.gender, skill: m && m[2] ? Number(m[2]) : 3, paid: false, guest: false, fixed: false, priv: !!a.priv, photo: null, freq: 0 });
+          added++;
+        }
+        return { ok: true, added, skipped };
+      }
       case 'savePlayer': {
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva o nome.');
@@ -312,17 +296,20 @@
         const dup = s.players.find(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== a.id);
         if (dup) return fail(`Já existe alguém chamado ${dup.name}.`);
         let p = a.id ? pm[a.id] : null;
-        if (!p) { p = { id: newId(s, 'p'), photo: null, freq: 0, fixed: false }; s.players.push(p); }
+        if (!p) { p = { id: newId(s, 'p'), photo: null, freq: 0, fixed: false, priv: false }; s.players.push(p); }
         Object.assign(p, { name, gender: a.gender, skill: clampSkill(a.skill), paid: !!a.paid, guest: !!a.guest });
         if (a.fixed !== undefined) p.fixed = !!a.fixed && !p.guest;
+        if (a.priv !== undefined) p.priv = !!a.priv && !p.guest;
         return ok;
       }
       case 'deletePlayer': {
         s.players = s.players.filter(x => x.id !== a.id);
-        s.presences = s.presences.filter(x => x.pid !== a.id);
-        s.out = s.out.filter(id => id !== a.id);
-        delete s.roles[a.id];
-        if (s.teams) s.teams.list = s.teams.list.map(t => t.filter(id => id !== a.id));
+        for (const g of Object.values(s.games)) {
+          g.presences = g.presences.filter(x => x.pid !== a.id);
+          g.out = g.out.filter(id => id !== a.id);
+          delete g.roles[a.id];
+          if (g.teams) g.teams.list = g.teams.list.map(t => t.filter(id => id !== a.id));
+        }
         return ok;
       }
       case 'togglePaid': { const p = pm[a.id]; if (p) p.paid = !p.paid; return ok; }
@@ -330,15 +317,22 @@
         const p = pm[a.id];
         if (!p || p.guest) return fail('Convidado não pode ter vaga garantida.');
         p.fixed = !p.fixed;
-        if (p.fixed) s.presences = s.presences.filter(x => x.pid !== p.id);
-        else s.out = s.out.filter(id => id !== p.id);
+        for (const g of Object.values(s.games)) {
+          if (p.fixed && g.meta.fixed) g.presences = g.presences.filter(x => x.pid !== p.id);
+          if (!p.fixed) g.out = g.out.filter(id => id !== p.id);
+        }
+        return ok;
+      }
+      case 'togglePriv': {
+        const p = pm[a.id];
+        if (!p || p.guest) return fail('Convidado não precisa da bolinha: quem trouxe já tem acesso.');
+        p.priv = !p.priv;
+        if (!p.priv) for (const g of Object.values(s.games)) if (g.meta.private) g.presences = g.presences.filter(x => x.pid !== p.id);
         return ok;
       }
       case 'settings': {
         const st = s.settings;
         if (a.groupName !== undefined) st.groupName = cleanName(a.groupName) || 'Vôlei Gran Felicitá';
-        if (a.max !== undefined) st.max = Math.min(60, Math.max(4, Math.round(Number(a.max) || 24)));
-        if (a.teams !== undefined) st.teams = Math.min(8, Math.max(2, Math.round(Number(a.teams) || 4)));
         if (a.guestLimit !== undefined) st.guestLimit = Math.min(10, Math.max(0, Math.round(Number(a.guestLimit) || 0)));
         if (a.paidPriority !== undefined) st.paidPriority = !!a.paidPriority;
         return ok;
@@ -352,10 +346,15 @@
           if (!(day >= 0 && day <= 6 && openDay >= 0 && openDay <= 6) || !start || !end || !openTime) return fail('Preencha dia e horários de todos os jogos.');
           if (toMins(end) <= toMins(start)) return fail('O horário de fim precisa ser depois do início.');
           if (list.some(x => x.day === day)) return fail(`Tem dois jogos na ${DAYS[day].toLowerCase()}.`);
-          list.push({ day, start, end, openDay, openTime });
+          list.push({
+            day, start, end, openDay, openTime,
+            max: Math.min(60, Math.max(4, Math.round(Number(g.max) || 24))),
+            teams: Math.min(8, Math.max(2, Math.round(Number(g.teams) || 4))),
+            private: !!g.private, fixed: !!g.fixed
+          });
         }
         s.settings.schedule = list.sort((x, y) => x.day - y.day);
-        s.current = activeGame(s, now);
+        normalize(s, now);
         return ok;
       }
       case 'lockNow': {
@@ -364,11 +363,6 @@
         return ok;
       }
       case 'unlock': s.settings.manualLockUntil = 0; return ok;
-      case 'resetPresences': {
-        finishGame(s);
-        s.presences = []; s.out = []; s.roles = {}; s.teams = null; s.log = [];
-        return ok;
-      }
       case 'resetFreq': s.players.forEach(p => { p.freq = 0; }); return ok;
       case 'resetPaid': s.players.forEach(p => { p.paid = false; }); return ok;
       case 'deleteSuggestion': s.suggestions = s.suggestions.filter(x => x.id !== a.id); return ok;
@@ -376,12 +370,121 @@
     return fail('Ação desconhecida.');
   }
 
-  /* O que todo mundo pode ver (sugestões só para admin). */
-  function publicState(s, isAdmin) {
-    if (isAdmin) return Object.assign({}, s);
-    const players = s.players.map(p => { const q = Object.assign({}, p); delete q.skill; return q; });
-    return Object.assign({}, s, { players, suggestions: [] });
+  function gameAction(s, v, a, c) {
+    const { now, admin, me, limit, pm } = c;
+    const fail = error => ({ ok: false, error });
+    const ok = { ok: true };
+    const meta = v.current;
+    const lk = lockInfo(v, now);
+    const lockMsg = lk.reason === 'notOpen' ? 'O check-in ainda não abriu.' : 'A lista está fechada agora.';
+    const locked = lk.locked && !admin;
+    const log = (act, pid) => { v.log.unshift({ ts: now, by: me ? me.id : null, act, pid: pid || null }); if (v.log.length > 300) v.log.length = 300; };
+    const addedByMe = () => v.presences.filter(x => x.by === a.by && x.pid !== a.by).length;
+    const limitMsg = limit ? `Você já marcou ${limit} pessoa${limit > 1 ? 's' : ''} além de você. Esse é o limite.` : 'Cada um só pode marcar a si mesmo.';
+    const isFixedHere = p => meta.fixed && p.fixed && canSee(meta, p);
+
+    switch (a.type) {
+      case 'join': {
+        const p = pm[a.pid];
+        if (!p) return fail('Jogador não encontrado.');
+        if (!p.guest && !canSee(meta, p)) return fail(`${p.name} não tem a bolinha desse jogo.`);
+        if (isFixedHere(p)) {
+          if (!admin && a.pid !== a.by) return fail('Só a própria pessoa ou um admin mexe na vaga da comissão.');
+          v.out = v.out.filter(id => id !== p.id); log('add', p.id); return ok;
+        }
+        if (locked) return fail(lockMsg);
+        if (v.presences.some(x => x.pid === p.id)) return ok;
+        if (!admin && p.id !== a.by && addedByMe() >= limit) return fail(limitMsg);
+        v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now });
+        log('add', p.id);
+        return ok;
+      }
+      case 'leave': {
+        const p = pm[a.pid];
+        if (p && isFixedHere(p)) {
+          if (!admin && a.pid !== a.by) return fail('Só a própria pessoa ou um admin mexe na vaga da comissão.');
+          if (!v.out.includes(p.id)) v.out.push(p.id);
+          delete v.roles[a.pid]; log('remove', p.id); return ok;
+        }
+        if (locked && lk.reason !== 'notOpen') return fail(lockMsg);
+        const before = v.presences.length;
+        v.presences = v.presences.filter(x => x.pid !== a.pid);
+        if (v.presences.length === before) return ok;
+        delete v.roles[a.pid];
+        log('remove', a.pid);
+        return ok;
+      }
+      case 'addGuest': {
+        if (locked) return fail(lockMsg);
+        const name = cleanName(a.name);
+        if (name.length < 2) return fail('Escreva o nome do convidado.');
+        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero do convidado.');
+        if (!admin && addedByMe() >= limit) return fail(limitMsg);
+        let p = s.players.find(x => x.name.toLowerCase() === name.toLowerCase());
+        if (p && !p.guest) return fail(`${p.name} já está no grupo. Marque na lista.`);
+        if (!p) {
+          p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0 };
+          s.players.push(p);
+          v.players = s.players;
+        }
+        if (v.presences.some(x => x.pid === p.id)) return fail(`${p.name} já está na lista.`);
+        v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now });
+        log('add', p.id);
+        return ok;
+      }
+      case 'role': {
+        if (!['setter', 'late'].includes(a.role) || !pm[a.pid]) return fail('Ação inválida.');
+        const r = v.roles[a.pid] || {};
+        r[a.role] = !r[a.role];
+        v.roles[a.pid] = r;
+        return ok;
+      }
+      case 'draw': {
+        const d = derive(v);
+        if (d.confirmed.length < 4) return fail('Precisa de pelo menos 4 confirmados pra sortear.');
+        v.teams = { ts: now, by: me ? me.id : null, list: drawTeams(v, d.confirmed, c.rand) };
+        log('draw');
+        return ok;
+      }
+      case 'resetPresences': {
+        if (!admin) return fail('Só quem é admin pode fazer isso.');
+        const d = derive(v);
+        d.confirmed.forEach(pid => { if (pm[pid]) pm[pid].freq = (pm[pid].freq || 0) + 1; });
+        s.history.unshift({ id: meta.id, confirmed: d.confirmed });
+        v.presences = []; v.out = []; v.roles = {}; v.teams = null; v.log = [];
+        return ok;
+      }
+    }
+    return fail('Ação desconhecida.');
   }
 
-  return { DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGame, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  /* O que cada pessoa recebe: sem nível (só admin), sem sugestões (só admin) e sem
+     os jogos fechados para quem não tem a bolinha. */
+  function publicState(s, isAdmin, meId) {
+    if (isAdmin) return Object.assign({}, s);
+    const me = s.players.find(p => p.id === meId);
+    const priv = !!(me && me.priv && !me.guest);
+    const games = {};
+    for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
+    const players = s.players.map(p => { const q = Object.assign({}, p); delete q.skill; return q; });
+    const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
+    return Object.assign({}, s, { players, games, settings, suggestions: [] });
+  }
+
+  /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */
+  function resumo(s) {
+    const pm = playerMap(s), out = [];
+    const nm = id => pm[id].name + (pm[id].guest ? ' (C)' : '');
+    for (const g of Object.values(s.games).sort((a, b) => a.meta.startAt - b.meta.startAt)) {
+      if (g.meta.private) continue;
+      const d = derive(view(s, g.meta.id));
+      out.push(`🏐 ${gameTitle(g.meta)} (${gameWhen(g.meta)}) — ${d.confirmed.length}/${g.meta.max}`,
+        ...d.fixed.map(id => `⭐ ${nm(id)}`), ...d.regular.map((id, i) => `${i + 1}. ${nm(id)}`));
+      if (d.waitlist.length) out.push('Espera:', ...d.waitlist.map((id, i) => `${i + 1}. ${nm(id)}`));
+      out.push('');
+    }
+    return out.join('\n').trim();
+  }
+
+  return { resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });

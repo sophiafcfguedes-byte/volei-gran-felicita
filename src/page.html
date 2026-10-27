@@ -212,6 +212,11 @@ ol.conf.wait li::before { color: var(--warn); }
 .search { gap: 6px; padding: 12px 16px; }
 input[type=search] { -webkit-appearance: none; appearance: none; }
 #who-list { display: grid; gap: 2px; }
+.gsel { display: flex; gap: 6px; flex-wrap: wrap; }
+.gsel button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgb(255 255 255 / .35); background: rgb(255 255 255 / .1); color: var(--court-ink); border-radius: 999px; padding: 6px 12px; min-height: 36px; font-weight: 700; font-size: .85rem; cursor: pointer; text-transform: capitalize; }
+.gsel button[aria-selected=true] { background: var(--ball); color: var(--ball-ink); border-color: var(--ball); }
+svg.ball { width: 16px; height: 16px; stroke-width: 1.6; flex: none; }
+.check svg.ball { color: var(--court); }
 .sug { border-left: 3px solid var(--ball); padding: 4px 0 4px 10px; display: grid; gap: 4px; }
 details summary { cursor: pointer; font-weight: 700; }
 .rules { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; font-size: .9rem; }
@@ -262,6 +267,7 @@ const store = {
 };
 const IMG = { badge: '{{BADGE}}', glide: '{{GLIDE}}', front: '{{FRONT}}' };
 const ICON = {
+  ball: '<svg class="ball" viewBox="0 0 24 24" aria-label="jogo fechado"><circle cx="12" cy="12" r="9"/><path d="M12 3c-1.5 3-1.5 6 0 9s1.5 6 0 9M3.5 9c3-.5 6 .5 8.5 3s5.5 3.5 8.5 3M5 18c1.5-3 4-5 7-6s5.5-3 7-6"/></svg>',
   hand: '<svg viewBox="0 0 24 24"><path d="M8 12V6.5a1.5 1.5 0 0 1 3 0V11m0-5.5V4.5a1.5 1.5 0 0 1 3 0V11m0-4a1.5 1.5 0 0 1 3 0v4m0-1.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-2a6 6 0 0 1-5-2.7L4.3 14.5a1.5 1.5 0 0 1 2.5-1.6L8 14.5"/></svg>',
   clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   wa: '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-13.3 7.9L3 21l1.2-4.5A9 9 0 1 1 21 12Z"/><path d="M9 9.5c.3 2 1.8 3.8 4.2 4.7l1.1-1.1 1.7.7-.3 1.4c-3.3.3-7.1-3-7.2-6.4l1.4-.3.7 1.7Z"/></svg>',
@@ -275,11 +281,11 @@ const now = () => Date.now() + skew;
 
 /* ---------- Backend: servidor de verdade, ou demonstração local ---------- */
 let demo = null;
-const demoPayload = () => ({ version: Date.now(), isAdmin: token === 'demo', now: Date.now(), state: LG.publicState(demo, token === 'demo') });
+const demoPayload = () => ({ version: Date.now(), isAdmin: token === 'demo', now: Date.now(), state: LG.publicState(demo, token === 'demo', me) });
 const Backend = {
   async load() {
     if (mode === 'demo') return demoPayload();
-    const r = await fetch('api/state', { headers: token ? { 'x-admin-token': token } : {}, cache: 'no-store' });
+    const r = await fetch('api/state?me=' + encodeURIComponent(me || ''), { headers: token ? { 'x-admin-token': token } : {}, cache: 'no-store' });
     if (!r.ok) throw new Error('http ' + r.status);
     const j = await r.json();
     if (!j || !j.state) throw new Error('resposta inválida');
@@ -289,7 +295,7 @@ const Backend = {
     if (mode === 'demo') {
       if (a.type === 'login') return a.password === 'admin' ? { ok: true, token: 'demo' } : { ok: false, error: 'Senha incorreta. Na demonstração a senha é admin.' };
       const r = LG.apply(demo, a, { isAdmin: token === 'demo', now: Date.now() });
-      if (r.ok) store.set('demoState2', demo);
+      if (r.ok) store.set('demoState3', demo);
       return Object.assign(r, demoPayload());
     }
     const r = await fetch('api/action', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'x-admin-token': token } : {}), body: JSON.stringify(a) });
@@ -301,35 +307,51 @@ function seedDemo() {
   const s = LG.initialState();
   const F = [['Sophia', 4], ['Ana', 4], ['Bia', 3], ['Carla', 2], ['Duda', 5], ['Fernanda', 3], ['Júlia', 2], ['Lara', 4], ['Marina', 3], ['Natália', 3], ['Paula', 2]];
   const M = [['Fábio', 4], ['André', 4], ['Bruno', 3], ['Caio', 5], ['Diego', 2], ['Eduardo', 3], ['Felipe', 4], ['Gustavo', 3], ['Henrique', 2], ['Igor', 3], ['João', 5], ['Lucas', 3], ['Mateus', 4], ['Otávio', 3], ['Rafael', 2], ['Tiago', 3], ['Vitor', 4]];
-  const add = (name, g, sk, guest) => { const id = 'd' + (s.seq++); s.players.push({ id, name, gender: g, skill: sk, paid: !guest && Math.random() < .5, guest: !!guest, fixed: name === 'Sophia' || name === 'Fábio', photo: null, freq: guest ? 0 : Math.floor(Math.random() * 25) }); return id; };
+  const PRIV = new Set(['Sophia', 'Fábio', 'Ana', 'Duda', 'Lara', 'Marina', 'André', 'Caio', 'Felipe', 'João', 'Mateus', 'Otávio', 'Vitor', 'Bruno', 'Igor', 'Carla']);
+  const add = (name, g, sk, guest) => { const id = 'd' + (s.seq++); s.players.push({ id, name, gender: g, skill: sk, paid: !guest && Math.random() < .5, guest: !!guest, fixed: name === 'Sophia' || name === 'Fábio', priv: PRIV.has(name), photo: null, freq: guest ? 0 : Math.floor(Math.random() * 25) }); return id; };
   F.forEach(([n, k]) => add(n, 'F', k)); M.forEach(([n, k]) => add(n, 'M', k));
   const g1 = add('Pedro', 'M', 3, true), g2 = add('Sofia', 'F', 2, true);
   LG.normalize(s, Date.now());
-  const ids = s.players.filter(p => !p.guest && !p.fixed).map(p => p.id);
-  const base = Math.min(Date.now() - 36e5, s.current ? s.current.openAt : Date.now());
-  ids.slice(0, 23).forEach((id, i) => s.presences.push({ pid: id, by: id, ts: base + i * 47e3 }));
-  s.presences.push({ pid: g1, by: ids[3], ts: base + 24 * 47e3 }, { pid: g2, by: ids[0], ts: base + 25 * 47e3 });
-  s.presences.slice().reverse().slice(0, 6).forEach(p => s.log.push({ ts: p.ts, by: p.by, act: 'add', pid: p.pid }));
+  for (const g of Object.values(s.games)) {
+    const ids = s.players.filter(p => !p.guest && !(g.meta.fixed && p.fixed) && (!g.meta.private || p.priv)).map(p => p.id);
+    const base = Math.min(Date.now() - 36e5, g.meta.openAt);
+    const n = g.meta.private ? 11 : 23;
+    ids.slice(0, n).forEach((id, i) => g.presences.push({ pid: id, by: id, ts: base + i * 47e3 }));
+    if (!g.meta.private) g.presences.push({ pid: g1, by: ids[3], ts: base + 24 * 47e3 }, { pid: g2, by: ids[0], ts: base + 25 * 47e3 });
+    g.presences.slice().reverse().slice(0, 6).forEach(p => g.log.push({ ts: p.ts, by: p.by, act: 'add', pid: p.pid }));
+  }
   return s;
 }
 
 /* ---------- Estado ---------- */
+/* RAW = tudo que o servidor mandou; S = o jogo escolhido, no formato que as telas usam. */
+let RAW = null, GL = [], sel = store.get('game', null);
 function applyPayload(j) {
-  S = j.state; isAdmin = !!j.isAdmin;
+  RAW = j.state; isAdmin = !!j.isAdmin;
   if (j.now) skew = j.now - Date.now();
   const changed = j.version !== version; version = j.version;
-  D = LG.derive(S);
-  if (me && !S.players.some(p => p.id === me && !p.guest)) { me = null; store.set('me', null); }
+  if (me && !RAW.players.some(p => p.id === me && !p.guest)) { me = null; store.set('me', null); }
   if (token && !isAdmin) { token = null; store.set('token', null); }
+  GL = Object.values(RAW.games || {}).map(g => g.meta).sort((a, b) => a.startAt - b.startAt);
+  if (!GL.some(g => g.id === sel)) sel = (GL.find(g => now() >= g.openAt) || GL[0] || {}).id || null;
+  aliasGame();
   return changed;
 }
+function aliasGame() {
+  const g = sel && RAW.games[sel];
+  S = Object.assign({}, RAW, g
+    ? { current: g.meta, presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log, settings: Object.assign({}, RAW.settings, { max: g.meta.max, teams: g.meta.teams }) }
+    : { current: null, presences: [], out: [], roles: {}, teams: null, log: [] });
+  D = LG.derive(S);
+}
+async function refresh() { try { applyPayload(await Backend.load()); } catch (e) {} render(); }
 async function poll() {
   if (document.hidden) return;
   try { if (applyPayload(await Backend.load())) render(); } catch (e) {}
 }
 let lastResult = null;
 async function act(a, okMsg, clear) {
-  a.by = me;
+  a.by = me; if (a.game === undefined) a.game = sel;
   let r;
   try { r = await Backend.act(a); } catch (e) { toast('Sem conexão. Tente de novo.', true); render(); return false; }
   if (r.token) { token = r.token; store.set('token', token); }
@@ -367,6 +389,7 @@ const opts = (list, val) => list.map(([v, t]) => `<option value="${h(v)}"${Strin
 const SKILLS = [[1, '1 · começando'], [2, '2 · básico'], [3, '3 · médio'], [4, '4 · bom'], [5, '5 · muito bom']];
 const GENDERS = [['F', 'Mulher'], ['M', 'Homem']];
 const DAY_OPTS = LG.DAYS.map((d, i) => [i, d]);
+const privLabel = () => (RAW.settings.schedule || []).filter(g => g.private).map(g => LG.DAYS[g.day].toLowerCase()).join(' e ') || 'jogo fechado';
 
 function waLink(text) { return 'https://wa.me/?text=' + encodeURIComponent(text); }
 function listText() {
@@ -405,6 +428,7 @@ function renderHeader() {
     <img class="swallow" src="${IMG.glide}" alt="">
     <div class="brand"><img src="${IMG.badge}" alt="Escudo Gran Felicitá">
       <div class="grow"><span class="eyebrow">${h(st.groupName)} <span class="stars" aria-hidden="true">★★</span></span><span>${chip}</span></div></div>
+    ${GL.length > 1 ? `<div class="gsel" role="tablist" aria-label="Jogos">${GL.map(x => { const q = spDate(x.startAt); return `<button role="tab" data-game="${x.id}" aria-selected="${x.id === sel}">${LG.DAYS_SHORT[x.day]} ${q.d}/${q.m + 1}${x.private ? ICON.ball : ''}</button>`; }).join('')}</div>` : ''}
     <div class="game">${cal}<div class="game-t"><h1>${h(gameTitle())}</h1><div class="when">${g ? `${g.start} às ${g.end}` : 'Peça pra um admin configurar os dias'}</div></div></div>
     <div class="tally"><span class="count">${D.confirmed.length}<small>/${st.max}</small></span><br><span class="count-label">confirmados${D.fixed.length ? ` · ${D.fixed.length} da comissão` : ''}${D.waitlist.length ? ` · ${D.waitlist.length} na espera` : ''}</span></div>`;
 }
@@ -413,13 +437,15 @@ function renderWho() {
   const p = me && P(me);
   if (!p) return `<div class="card who"><div class="grow"><b>Quem é você?</b><div class="hint">Escolha seu nome pra fazer check-in.</div></div><button class="btn btn-primary" data-act="whoami">Escolher</button></div>`;
   const mine = S.presences.filter(x => x.by === me && x.pid !== me).length, lim = S.settings.guestLimit;
-  const sub = p.fixed ? 'Você tem vaga garantida da comissão' : lim ? `Você marcou ${mine} de ${lim} pessoa${lim > 1 ? 's' : ''} além de você` : 'Cada um faz o próprio check-in';
+  const sub = p.fixed && S.current && S.current.fixed ? 'Você tem vaga garantida da comissão' : lim ? `Você marcou ${mine} de ${lim} pessoa${lim > 1 ? 's' : ''} além de você` : 'Cada um faz o próprio check-in';
   return `<div class="card who">${avatar(p)}<div class="grow"><b>${h(p.name)}</b><div class="hint">${sub}</div></div><button class="link" data-act="whoami">Trocar</button></div>`;
 }
 
 function renderLista() {
   const demoNote = mode === 'demo' ? '<div class="demo"><b>Demonstração.</b> Os nomes são exemplos e tudo fica só neste aparelho. A senha de admin aqui é <b>admin</b> (admin consegue mexer mesmo com o check-in fechado).</div>' : '';
-  const members = S.players.filter(p => !p.guest).sort(byName);
+  const priv = S.current && S.current.private;
+  const members = S.players.filter(p => !p.guest && (!priv || p.priv)).sort(byName);
+  const fxHere = p => !!(S.current && S.current.fixed && p.fixed && (!priv || p.priv));
   if (!S.players.length) return demoNote + `<div class="card empty"><img class="mascot" src="${IMG.front}" alt=""><h2>Ninguém cadastrado ainda</h2><p>Quem é admin cadastra os jogadores em <b>Mais → Admin</b>.</p></div>`;
   const pos = {};
   D.fixed.forEach(id => pos[id] = '<span class="pos fx">comissão</span>');
@@ -427,8 +453,8 @@ function renderLista() {
   D.waitlist.forEach((id, i) => pos[id] = `<span class="pos wait">espera ${i + 1}</span>`);
   const edit = canEdit();
   const row = p => {
-    const on = !!pos[p.id], can = p.fixed ? canEditFixed(p) : edit;
-    return `<label class="row${on ? ' on' : ''}" data-n="${h(norm(p.name))}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${can ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${p.paid ? '<span class="paid">pago</span>' : ''}${pos[p.id] || (p.fixed ? '<span class="pos wait">não vai</span>' : '')}</label>`;
+    const on = !!pos[p.id], can = fxHere(p) ? canEditFixed(p) : edit;
+    return `<label class="row${on ? ' on' : ''}" data-n="${h(norm(p.name))}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${can ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${p.paid ? '<span class="paid">pago</span>' : ''}${pos[p.id] || (fxHere(p) ? '<span class="pos wait">não vai</span>' : '')}</label>`;
   };
   const section = (title, list) => list.length ? `<div class="card" data-sec><div class="sec-h"><h2>${title}</h2><span class="muted">${list.filter(p => pos[p.id]).length} de ${list.length}</span></div><div class="list">${list.map(row).join('')}</div></div>` : '';
   const guests = S.players.filter(p => p.guest).sort((a, b) => (pos[b.id] ? 1 : 0) - (pos[a.id] ? 1 : 0) || byName(a, b));
@@ -514,8 +540,8 @@ function renderMais() {
     <div class="card"><h2>Tema</h2><div class="seg" role="group" aria-label="Tema">
       ${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Escuro']].map(([v, t]) => `<button data-theme-set="${v}" aria-pressed="${theme === v}">${t}</button>`).join('')}</div></div>
     <div class="card"><details><summary>Como a lista funciona</summary><ul class="rules" style="margin-top:10px">
-      ${sched.map(g => `<li><b>${LG.DAYS[g.day]}</b>, das ${h(g.start)} às ${h(g.end)}. Check-in abre ${LG.DAYS[g.openDay].toLowerCase()} às ${h(g.openTime)}.</li>`).join('')}
-      <li>São ${st.max} vagas${D.fixed.length ? `: ${D.fixed.length} da comissão, que já têm vaga garantida, e ${D.open} por ordem de check-in` : ' por ordem de check-in'}.</li>
+      ${sched.map(g => `<li><b>${LG.DAYS[g.day]}</b>, das ${h(g.start)} às ${h(g.end)}: ${g.max} vagas${g.fixed ? ' (a comissão já tem vaga garantida)' : ''}. Check-in abre ${LG.DAYS[g.openDay].toLowerCase()} às ${h(g.openTime)}.</li>`).join('')}
+      <li>As vagas vão por ordem de check-in.</li>
       ${st.paidPriority ? '<li>Quem pagou a vaquinha passa na frente de quem não pagou.</li>' : ''}
       <li>Passou das vagas, entra na lista de espera, que sobe sozinha quando alguém desiste.</li>
       <li>${st.guestLimit ? `Cada pessoa faz o próprio check-in e pode marcar até ${st.guestLimit} outra${st.guestLimit > 1 ? 's' : ''} (incluindo convidados).` : 'Cada pessoa faz o próprio check-in.'} Tirar não tem limite.</li>
@@ -538,15 +564,17 @@ function renderMais() {
           <div class="field"><label for="sc-end-${i}">Termina</label><input type="time" id="sc-end-${i}" value="${h(g.end)}"></div></div>
         <div class="grid3"><div class="field"><label for="sc-oday-${i}">Check-in abre</label><select id="sc-oday-${i}">${opts(DAY_OPTS, g.openDay)}</select></div>
           <div class="field"><label for="sc-otime-${i}">Às</label><input type="time" id="sc-otime-${i}" value="${h(g.openTime)}"></div>
-          <div class="btns" style="align-items:end"><button class="btn btn-ghost btn-sm" data-schedrm="${i}">Remover</button></div></div></div>`).join('')}
+          <div class="btns" style="align-items:end"><button class="btn btn-ghost btn-sm" data-schedrm="${i}">Remover</button></div></div>
+        <div class="grid3"><div class="field"><label for="sc-max-${i}">Vagas</label><input type="number" id="sc-max-${i}" min="4" max="60" value="${g.max || 24}"></div>
+          <div class="field"><label for="sc-teams-${i}">Times</label><input type="number" id="sc-teams-${i}" min="2" max="8" value="${g.teams || 4}"></div></div>
+        <label class="check"><input type="checkbox" id="sc-fixed-${i}"${g.fixed ? ' checked' : ''}> Comissão tem vaga garantida</label>
+        <label class="check"><input type="checkbox" id="sc-priv-${i}"${g.private ? ' checked' : ''}> ${ICON.ball} Só pra quem tem a bolinha</label></div>`).join('')}
       <div class="btns"><button class="btn btn-ghost" data-act="add-sched">Adicionar dia</button><button class="btn btn-primary" data-act="save-sched">Salvar dias</button></div></div>
 
-    <div class="card"><h2>Admin · Vagas</h2>
+    <div class="card"><h2>Admin · Regras gerais</h2>
       <div class="field"><label for="s-group">Nome do grupo</label><input type="text" id="s-group" value="${h(st.groupName)}"></div>
-      <div class="grid3"><div class="field"><label for="s-max">Vagas no total</label><input type="number" id="s-max" min="4" max="60" value="${st.max}"></div>
-        <div class="field"><label for="s-teams">Times</label><input type="number" id="s-teams" min="2" max="8" value="${st.teams || 4}"></div>
-        <div class="field"><label for="s-limit">Pode marcar</label><input type="number" id="s-limit" min="0" max="10" value="${st.guestLimit}"></div></div>
-      <p class="hint">Com ${D.fixed.length} da comissão, sobram <b>${Math.max(0, st.max - D.fixed.length)}</b> vagas pro check-in. "Pode marcar" é quantas pessoas cada um consegue marcar além de si.</p>
+      <div class="field"><label for="s-limit">Quantas pessoas cada um pode marcar além de si</label><input type="number" id="s-limit" min="0" max="10" value="${st.guestLimit}"></div>
+      <p class="hint">Vagas e número de times de cada jogo ficam em <b>Dias de jogo</b>, acima.</p>
       <label class="check"><input type="checkbox" id="s-prio"${st.paidPriority ? ' checked' : ''}> Quem pagou a vaquinha passa na frente</label>
       <button class="btn btn-primary" data-act="save-settings">Salvar</button></div>
 
@@ -556,17 +584,19 @@ function renderMais() {
         <div class="field"><label for="np-skill">Nível</label><select id="np-skill">${opts(SKILLS, 3)}</select></div></div>
       <label class="check"><input type="checkbox" id="np-paid"> Pagou a vaquinha</label>
       <label class="check"><input type="checkbox" id="np-fixed"> Comissão (vaga garantida)</label>
+      <label class="check"><input type="checkbox" id="np-priv"> ${ICON.ball} Liberado pro vôlei de ${h(privLabel())}</label>
       <button class="btn btn-primary" data-act="add-player">Cadastrar</button>
       <details class="bulk"><summary>Cadastrar vários de uma vez</summary>
         <p class="hint">Cole um nome por linha. Se quiser, coloque o nível no fim (ex.: <b>Ana 4</b>). Sem nível, fica 3. Faça uma vez pras mulheres e outra pros homens.</p>
         <div class="field"><label for="bulk-gender">Gênero de todos da lista</label><select id="bulk-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
         <div class="field"><label for="bulk-text">Nomes</label><textarea id="bulk-text" placeholder="Ana 4&#10;Bia&#10;Carla 2"></textarea></div>
+        <label class="check"><input type="checkbox" id="bulk-priv"> ${ICON.ball} Todos liberados pro vôlei de ${h(privLabel())}</label>
         <button class="btn btn-primary" data-act="bulk-add">Cadastrar todos</button></details>
       <div>${players.map(q => `<div class="adm-player">${avatar(q)}<b>${h(nameOf(q))}</b>
         <div class="ctrls"><select data-edit="${q.id}" data-field="gender" aria-label="Gênero de ${h(q.name)}">${opts(GENDERS, q.gender)}</select>
           <select data-edit="${q.id}" data-field="skill" aria-label="Nível de ${h(q.name)}">${opts(SKILLS, q.skill)}</select>
           <button class="tog setter" aria-pressed="${!!q.paid}" data-paid="${q.id}">pago</button>
-          ${q.guest ? '<span></span>' : `<button class="tog setter" aria-pressed="${!!q.fixed}" data-fixed="${q.id}">comissão</button>`}
+          ${q.guest ? '' : `<button class="tog setter" aria-pressed="${!!q.fixed}" data-fixed="${q.id}">comissão</button><button class="tog setter" aria-pressed="${!!q.priv}" data-priv="${q.id}" title="Vê e faz check-in nos jogos fechados">${ICON.ball}${h(privLabel())}</button>`}
           <button class="btn btn-danger btn-sm" data-del="${q.id}" data-confirm>Excluir</button></div></div>`).join('')}</div></div>
 
     <div class="card"><h2>Admin · Fechar a lista</h2>
@@ -625,7 +655,7 @@ function closeSheet() { $('#sheet').hidden = true; $('#sheet').innerHTML = ''; }
 let toastTimer;
 function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, err ? 4000 : 2200); }
 const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
-const readSched = () => [...document.querySelectorAll('[data-sched]')].map(r => { const i = r.dataset.sched; return { day: Number(val('sc-day-' + i)), start: val('sc-start-' + i), end: val('sc-end-' + i), openDay: Number(val('sc-oday-' + i)), openTime: val('sc-otime-' + i) }; });
+const readSched = () => [...document.querySelectorAll('[data-sched]')].map(r => { const i = r.dataset.sched; return { day: Number(val('sc-day-' + i)), start: val('sc-start-' + i), end: val('sc-end-' + i), openDay: Number(val('sc-oday-' + i)), openTime: val('sc-otime-' + i), max: Number(val('sc-max-' + i)), teams: Number(val('sc-teams-' + i)), fixed: document.getElementById('sc-fixed-' + i).checked, private: document.getElementById('sc-priv-' + i).checked }; });
 
 function armed(btn) {
   if (!btn.hasAttribute('data-confirm') || btn.dataset.armed) return true;
@@ -639,7 +669,9 @@ document.addEventListener('click', async e => {
   if (!t) { if (e.target.id === 'sheet') closeSheet(); return; }
   if (t.dataset.tab) { tab = t.dataset.tab; store.set('tab', tab); render(); window.scrollTo(0, 0); return; }
   if (!armed(t)) return;
-  if (t.dataset.pick) { me = t.dataset.pick; store.set('me', me); closeSheet(); render(); toast('Oi, ' + P(me).name + '!'); return; }
+  if (t.dataset.pick) { me = t.dataset.pick; store.set('me', me); closeSheet(); await refresh(); toast('Oi, ' + P(me).name + '!'); return; }
+  if (t.dataset.game) { sel = t.dataset.game; store.set('game', sel); aliasGame(); render(); return; }
+  if (t.dataset.priv) return act({ type: 'togglePriv', id: t.dataset.priv });
   if (t.dataset.paid) return act({ type: 'togglePaid', id: t.dataset.paid });
   if (t.dataset.fixed) return act({ type: 'toggleFixed', id: t.dataset.fixed });
   if (t.dataset.schedrm) return act({ type: 'schedule', schedule: readSched().filter((g, i) => i !== Number(t.dataset.schedrm)) }, 'Dia removido.');
@@ -653,9 +685,9 @@ document.addEventListener('click', async e => {
       try { r = await Backend.act({ type: 'register', name: val('reg-name'), gender: val('reg-gender') }); } catch (e) { toast('Sem conexão. Tente de novo.', true); return; }
       if (r.state) applyPayload(r);
       if (!r.ok) { toast(r.error || 'Não deu certo.', true); return; }
-      me = r.id; store.set('me', me); closeSheet(); render(); toast('Cadastrado! Oi, ' + P(me).name + '!'); return;
+      me = r.id; store.set('me', me); closeSheet(); await refresh(); toast('Cadastrado! Oi, ' + P(me).name + '!'); return;
     }
-    case 'bulk-add': return act({ type: 'bulkAdd', text: val('bulk-text'), gender: val('bulk-gender') }, null, ['bulk-text']).then(ok => { if (ok && lastResult && lastResult.added != null) toast(`${lastResult.added} cadastrado${lastResult.added === 1 ? '' : 's'}${lastResult.skipped ? `, ${lastResult.skipped} já existia${lastResult.skipped === 1 ? '' : 'm'}` : ''}.`); });
+    case 'bulk-add': return act({ type: 'bulkAdd', text: val('bulk-text'), gender: val('bulk-gender'), priv: document.getElementById('bulk-priv').checked }, null, ['bulk-text']).then(ok => { if (ok && lastResult && lastResult.added != null) toast(`${lastResult.added} cadastrado${lastResult.added === 1 ? '' : 's'}${lastResult.skipped ? `, ${lastResult.skipped} já existia${lastResult.skipped === 1 ? '' : 'm'}` : ''}.`); });
     case 'close-sheet': return closeSheet();
     case 'addGuest': return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill') }, 'Convidado adicionado.', ['g-name']);
     case 'draw': return act({ type: 'draw' }, 'Times sorteados!');
@@ -664,10 +696,10 @@ document.addEventListener('click', async e => {
     case 'sug-sign': return act({ type: 'suggest', text: val('sug-text'), anon: false }, 'Sugestão enviada. Obrigado!', ['sug-text']);
     case 'login': return act({ type: 'login', password: val('adm-pw') }, 'Você entrou como admin.', ['adm-pw']);
     case 'logout': token = null; store.set('token', null); isAdmin = false; await poll(); render(); return;
-    case 'save-settings': return act({ type: 'settings', groupName: val('s-group'), max: val('s-max'), teams: val('s-teams'), guestLimit: val('s-limit'), paidPriority: document.getElementById('s-prio').checked }, 'Salvo.');
+    case 'save-settings': return act({ type: 'settings', groupName: val('s-group'), guestLimit: val('s-limit'), paidPriority: document.getElementById('s-prio').checked }, 'Salvo.');
     case 'save-sched': return act({ type: 'schedule', schedule: readSched() }, 'Dias salvos.');
-    case 'add-sched': { const list = readSched(); const used = new Set(list.map(g => g.day)); const day = [1, 2, 3, 4, 5, 6, 0].find(d => !used.has(d)); if (day === undefined) return; list.push({ day, start: '19:00', end: '22:00', openDay: (day + 6) % 7, openTime: '12:00' }); return act({ type: 'schedule', schedule: list }, 'Dia adicionado.'); }
-    case 'add-player': return act({ type: 'savePlayer', name: val('np-name'), gender: val('np-gender'), skill: val('np-skill'), paid: document.getElementById('np-paid').checked, fixed: document.getElementById('np-fixed').checked }, 'Jogador cadastrado.', ['np-name']);
+    case 'add-sched': { const list = readSched(); const used = new Set(list.map(g => g.day)); const day = [1, 2, 3, 4, 5, 6, 0].find(d => !used.has(d)); if (day === undefined) return; list.push({ day, start: '19:00', end: '22:00', openDay: (day + 6) % 7, openTime: '12:00', max: 24, teams: 4, fixed: true, private: false }); return act({ type: 'schedule', schedule: list }, 'Dia adicionado.'); }
+    case 'add-player': return act({ type: 'savePlayer', name: val('np-name'), gender: val('np-gender'), skill: val('np-skill'), paid: document.getElementById('np-paid').checked, fixed: document.getElementById('np-fixed').checked, priv: document.getElementById('np-priv').checked }, 'Jogador cadastrado.', ['np-name']);
     case 'lock': return act({ type: 'lockNow', minutes: val('lk-min') }, 'Lista fechada.');
     case 'unlock': return act({ type: 'unlock' }, 'Lista reaberta.');
     case 'resetPresences': return act({ type: 'resetPresences' }, 'Jogo encerrado. Frequência atualizada.');
@@ -710,7 +742,7 @@ function applyTheme() {
 async function boot() {
   applyTheme();
   try { applyPayload(await Backend.load()); }
-  catch (e) { mode = 'demo'; demo = store.get('demoState2', null) || seedDemo(); store.set('demoState2', demo); applyPayload(demoPayload()); }
+  catch (e) { mode = 'demo'; demo = store.get('demoState3', null) || seedDemo(); store.set('demoState3', demo); applyPayload(demoPayload()); }
   render();
   if (mode === 'server') { setInterval(poll, 8000); document.addEventListener('visibilitychange', poll); }
   setInterval(() => { if (S) { const lk = JSON.stringify(LG.lockInfo(S, now())); if (lk !== boot.lk) { boot.lk = lk; render(); } } }, 30000);

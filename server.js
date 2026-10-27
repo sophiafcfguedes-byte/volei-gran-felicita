@@ -48,7 +48,7 @@ http.createServer(async (req, res) => {
     if (url.pathname === '/api/state' && req.method === 'GET') {
       const adm = isAdmin(req);
       L.normalize(state, Date.now());
-      return send(res, 200, { version, isAdmin: adm, now: Date.now(), state: L.publicState(state, adm) });
+      return send(res, 200, { version: version + ':' + (url.searchParams.get('me') || ''), isAdmin: adm, now: Date.now(), state: L.publicState(state, adm, url.searchParams.get('me')) });
     }
     if (url.pathname === '/api/action' && req.method === 'POST') {
       const a = await readBody(req);
@@ -60,16 +60,12 @@ http.createServer(async (req, res) => {
       const adm = isAdmin(req);
       const r = L.apply(state, a, { isAdmin: adm, now: Date.now() });
       if (r.ok) { version = Date.now(); save(); }
-      return send(res, 200, Object.assign(r, { version, isAdmin: adm, now: Date.now(), state: L.publicState(state, adm) }));
+      return send(res, 200, Object.assign(r, { version: version + ':' + (a.by || ''), isAdmin: adm, now: Date.now(), state: L.publicState(state, adm, a.by) }));
     }
     /* Resumo em texto — útil para o robô do WhatsApp mandar no grupo. */
     if (url.pathname === '/api/resumo' && req.method === 'GET') {
       L.normalize(state, Date.now());
-      const d = L.derive(state), pm = Object.fromEntries(state.players.map(p => [p.id, p]));
-      const nm = id => pm[id].name + (pm[id].guest ? ' (C)' : '');
-      const lines = [`🏐 ${L.gameTitle(state.current)} (${L.gameWhen(state.current)}) — ${d.confirmed.length}/${state.settings.max}`, ...d.confirmed.map((id, i) => `${i + 1}. ${nm(id)}`)];
-      if (d.waitlist.length) lines.push('', 'Espera:', ...d.waitlist.map((id, i) => `${i + 1}. ${nm(id)}`));
-      return send(res, 200, lines.join('\n'), 'text/plain; charset=utf-8');
+      return send(res, 200, L.resumo(state), 'text/plain; charset=utf-8');
     }
     if (req.method !== 'GET') return send(res, 405, { error: 'método não permitido' });
     let file = path.normalize(path.join(PUBLIC, url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname)));

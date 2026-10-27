@@ -22,20 +22,16 @@ export default async (req) => {
   const token = pw ? createHash('sha256').update('volei:' + pw).digest('hex') : null;
   const isAdmin = !!token && req.headers.get('x-admin-token') === token;
   const store = getStore({ name: 'volei', consistency: 'strong' });
-  const payload = (state, extra) => Object.assign({}, extra, { version: state.updatedAt || 0, isAdmin, now: Date.now(), state: L.publicState(state, isAdmin) });
+  const payload = (state, extra, meId) => Object.assign({}, extra, { version: (state.updatedAt || 0) + ':' + (meId || ''), isAdmin, now: Date.now(), state: L.publicState(state, isAdmin, meId) });
 
   if (url.pathname === '/api/state' && req.method === 'GET') {
     const { state } = await load(store);
-    return json(payload(state));
+    return json(payload(state, null, url.searchParams.get('me')));
   }
 
   if (url.pathname === '/api/resumo' && req.method === 'GET') {
     const { state } = await load(store);
-    const d = L.derive(state), pm = Object.fromEntries(state.players.map(p => [p.id, p]));
-    const nm = id => pm[id].name + (pm[id].guest ? ' (C)' : '');
-    const lines = [`🏐 ${L.gameTitle(state.current)} (${L.gameWhen(state.current)}) — ${d.confirmed.length}/${state.settings.max}`, ...d.confirmed.map((id, i) => `${i + 1}. ${nm(id)}`)];
-    if (d.waitlist.length) lines.push('', 'Espera:', ...d.waitlist.map((id, i) => `${i + 1}. ${nm(id)}`));
-    return new Response(lines.join('\n'), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
+    return new Response(L.resumo(state), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
   }
 
   if (url.pathname === '/api/action' && req.method === 'POST') {
@@ -53,12 +49,12 @@ export default async (req) => {
     for (let attempt = 0; attempt < 6; attempt++) {
       const { state, etag } = await load(store);
       const r = L.apply(state, a, { isAdmin, now: Date.now() });
-      if (!r.ok) return json(payload(state, r));
+      if (!r.ok) return json(payload(state, r, a.by));
       state.updatedAt = Date.now();
       const res = etag
         ? await store.setJSON(KEY, state, { onlyIfMatch: etag })
         : await store.setJSON(KEY, state, { onlyIfNew: true });
-      if (!res || res.modified !== false) return json(payload(state, r));
+      if (!res || res.modified !== false) return json(payload(state, r, a.by));
       await new Promise(ok => setTimeout(ok, 60 + Math.random() * 140));
     }
     return json({ ok: false, error: 'Muita gente mexendo ao mesmo tempo. Tente de novo.' });
