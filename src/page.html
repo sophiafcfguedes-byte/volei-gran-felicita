@@ -97,6 +97,7 @@ main { display: grid; gap: 14px; }
 .paid { font-size: .7rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--ball-ink); background: var(--ball); padding: 2px 7px; border-radius: 999px; flex: none; }
 .pos { font-size: .78rem; font-weight: 700; color: var(--court); font-variant-numeric: tabular-nums; flex: none; min-width: 2.2em; text-align: right; }
 .pos.wait { color: var(--warn); }
+.pos.ban { color: var(--danger); }
 .pos.fx { color: var(--ball-ink); background: var(--ball-soft); border: 1px solid var(--ball); border-radius: 999px; padding: 1px 8px; font-size: .72rem; min-width: 0; }
 .opens { grid-template-columns: auto 1fr; align-items: center; background: var(--ball-soft); border-color: var(--ball); }
 .mascot.sm { width: 64px; margin: 0; }
@@ -295,7 +296,7 @@ const Backend = {
     if (mode === 'demo') {
       if (a.type === 'login') return a.password === 'admin' ? { ok: true, token: 'demo' } : { ok: false, error: 'Senha incorreta. Na demonstração a senha é admin.' };
       const r = LG.apply(demo, a, { isAdmin: token === 'demo', now: Date.now() });
-      if (r.ok) store.set('demoState6', demo);
+      if (r.ok) store.set('demoState7', demo);
       return Object.assign(r, demoPayload());
     }
     const r = await fetch('api/action', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'x-admin-token': token } : {}), body: JSON.stringify(a) });
@@ -361,7 +362,8 @@ async function act(a, okMsg, clear) {
   if (!r.ok) { toast(r.error || 'Não deu certo.', true); render(); return false; }
   render();
   (clear || []).forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  if (okMsg) toast(okMsg);
+  if (r.banned) toast(`Nome tirado. Você ficou fora do vôlei de ${LG.DAYS[r.bannedDay].toLowerCase()} (${fmtDM(r.banned)}).`, true);
+  else if (okMsg) toast(okMsg);
   return true;
 }
 
@@ -381,6 +383,7 @@ const fmtLong = ts => new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '
 const spDate = ts => { const d = new Date(ts - 3 * 3600e3); return { d: d.getUTCDate(), m: d.getUTCMonth(), wd: d.getUTCDay() }; };
 const gameTitle = () => LG.gameTitle(S.current);
 const whenText = () => S.current ? `${fmtLong(S.current.startAt)} · ${S.current.start}–${S.current.end}` : '';
+const fmtDM = iso => { const [, m, d] = String(iso).split('-'); return `${Number(d)}/${Number(m)}`; };
 const opensText = g => `${fmtLong(g.openAt)}, às ${fmtTime(g.openAt)}`;
 const locked = () => LG.lockInfo(S, now()).locked && !isAdmin;
 const canEdit = () => (!!me || isAdmin) && !locked();
@@ -452,18 +455,21 @@ function renderLista() {
   D.fixed.forEach(id => pos[id] = '<span class="pos fx">comissão</span>');
   D.regular.forEach((id, i) => pos[id] = `<span class="pos">${i + 1}º</span>`);
   D.waitlist.forEach((id, i) => pos[id] = `<span class="pos wait">espera ${i + 1}</span>`);
+  const banned = new Set((S.bans || []).filter(b => S.current && b.game === S.current.id).map(b => b.pid));
   const edit = canEdit();
   const allowGuests = !S.current || S.current.guests !== false;
   const row = p => {
     const pres = S.presences.find(x => x.pid === p.id);
     const mine = isAdmin || p.id === me || (p.guest && allowGuests && (!pres || pres.by === me));
-    const on = !!pos[p.id], can = fxHere(p) ? canEditFixed(p) : edit && mine;
-    return `<label class="row${on ? ' on' : ''}" data-n="${h(norm(p.name))}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${can ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${p.paid ? '<span class="paid">pago</span>' : ''}${pos[p.id] || (fxHere(p) ? '<span class="pos wait">não vai</span>' : '')}</label>`;
+    const on = !!pos[p.id], can = fxHere(p) ? canEditFixed(p) : edit && mine && (isAdmin || !banned.has(p.id));
+    return `<label class="row${on ? ' on' : ''}" data-n="${h(norm(p.name))}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${can ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${p.paid ? '<span class="paid">pago</span>' : ''}${pos[p.id] || (banned.has(p.id) ? '<span class="pos ban">suspenso</span>' : fxHere(p) ? '<span class="pos wait">não vai</span>' : '')}</label>`;
   };
   const section = (title, list) => list.length ? `<div class="card" data-sec><div class="sec-h"><h2>${title}</h2><span class="muted">${list.filter(p => pos[p.id]).length} de ${list.length}</span></div><div class="list">${list.map(row).join('')}</div></div>` : '';
   const guests = S.players.filter(p => p.guest && (allowGuests || pos[p.id])).sort((a, b) => (pos[b.id] ? 1 : 0) - (pos[a.id] ? 1 : 0) || byName(a, b));
   const lk = LG.lockInfo(S, now());
   let lockMsg = '';
+  const myBan = me && (S.bans || []).find(b => S.current && b.game === S.current.id && b.pid === me);
+  if (myBan) lockMsg += `<div class="notice">Você tirou o nome do vôlei de ${LG.DAYS[myBan.fromDay].toLowerCase()} (${fmtDM(myBan.from)}) depois das ${h(myBan.cutoff)}, então está fora deste jogo.${isAdmin ? '' : ' Se foi engano, fale com a comissão.'}</div>`;
   if (lk.reason === 'notOpen') lockMsg = `<div class="card opens"><img class="mascot sm" src="${IMG.front}" alt=""><div><b>O check-in abre ${h(opensText(S.current))}</b><div class="hint">${isAdmin ? 'Você é admin e já consegue mexer na lista.' : 'Volte nesse horário. Quem marcar primeiro garante a vaga.'}</div></div></div>`;
   else if (lk.locked && !isAdmin) lockMsg = `<div class="notice">A lista está fechada agora. Só quem é admin consegue mexer.</div>`;
   const prio = S.settings.paidPriority;
@@ -546,6 +552,7 @@ function renderMais() {
     <div class="card"><details><summary>Como a lista funciona</summary><ul class="rules" style="margin-top:10px">
       ${sched.map(g => `<li><b>${LG.DAYS[g.day]}</b>, das ${h(g.start)} às ${h(g.end)}: ${g.max} vagas${g.fixed ? ' (a comissão já tem vaga garantida)' : ''}${g.guests === false ? ', sem convidados' : ''}. Check-in abre ${LG.DAYS[g.openDay].toLowerCase()} às ${h(g.openTime)}.</li>`).join('')}
       <li>As vagas vão por ordem de check-in.</li>
+      <li><b>Desistência:</b> quem estava confirmado e tirar o nome no dia do jogo a partir das ${h((sched[0] || {}).cutoff || '17:00')} fica fora do próximo jogo. Segunda e quinta contam juntas (saiu da segunda, perde a quinta; saiu da quinta, perde a segunda)${sched.some(g => g.private) ? '; a quarta conta separado (perde a quarta seguinte)' : ''}. Quem está na lista de espera pode sair sem problema.</li>
       ${st.paidPriority ? '<li>Quem pagou a vaquinha passa na frente de quem não pagou.</li>' : ''}
       <li>Passou das vagas, entra na lista de espera, que sobe sozinha quando alguém desiste.</li>
       <li>Cada pessoa só marca e desmarca o próprio nome.${st.guestLimit ? ` Nos jogos que aceitam convidados, cada um pode trazer até ${st.guestLimit}, e só quem trouxe pode tirar.` : ''}</li>
@@ -569,7 +576,7 @@ function renderMais() {
         <div class="grid3"><div class="field"><label for="sc-oday-${i}">Check-in abre</label><select id="sc-oday-${i}">${opts(DAY_OPTS, g.openDay)}</select></div>
           <div class="field"><label for="sc-otime-${i}">Às</label><input type="time" id="sc-otime-${i}" value="${h(g.openTime)}"></div>
           <div class="btns" style="align-items:end"><button class="btn btn-ghost btn-sm" data-schedrm="${i}">Remover</button></div></div>
-        <div class="grid3"><div class="field"><label for="sc-max-${i}">Vagas</label><input type="number" id="sc-max-${i}" min="4" max="60" value="${g.max || 24}"></div>
+        <div class="grid3"><div class="field"><label for="sc-cut-${i}">Desistência punida a partir de</label><input type="time" id="sc-cut-${i}" value="${h(g.cutoff || '17:00')}"></div><div class="field"><label for="sc-max-${i}">Vagas</label><input type="number" id="sc-max-${i}" min="4" max="60" value="${g.max || 24}"></div>
           <div class="field"><label for="sc-teams-${i}">Times</label><input type="number" id="sc-teams-${i}" min="2" max="8" value="${g.teams || 4}"></div></div>
         <label class="check"><input type="checkbox" id="sc-fixed-${i}"${g.fixed ? ' checked' : ''}> Comissão tem vaga garantida</label>
         <label class="check"><input type="checkbox" id="sc-guests-${i}"${g.guests !== false ? ' checked' : ''}> Permite convidados</label>
@@ -603,6 +610,10 @@ function renderMais() {
           <button class="tog setter" aria-pressed="${!!q.paid}" data-paid="${q.id}">pago</button>
           ${q.guest ? '' : `<button class="tog setter" aria-pressed="${!!q.fixed}" data-fixed="${q.id}">comissão</button><button class="tog setter" aria-pressed="${!!q.priv}" data-priv="${q.id}" title="Vê e faz check-in nos jogos fechados">${ICON.ball}${h(privLabel())}</button>`}
           <button class="btn btn-danger btn-sm" data-del="${q.id}" data-confirm>Excluir</button></div></div>`).join('')}</div></div>
+
+    <div class="card"><h2>Admin · Suspensões</h2>
+      <p class="hint">Quem tirou o nome no dia do jogo depois do horário-limite fica fora do próximo. Toque em <b>Liberar</b> se foi engano.</p>
+      ${(S.bans || []).length ? (S.bans || []).slice().sort((x, y) => x.game.localeCompare(y.game)).map(b => `<div class="role-row">${avatar(P(b.pid))}<span class="nm">${h(nameOf(P(b.pid)))}<br><span class="by">saiu ${LG.DAYS_SHORT[b.fromDay]} ${fmtDM(b.from)} · fora de ${LG.DAYS_SHORT[b.nextDay]} ${fmtDM(b.game)}</span></span><button class="btn btn-ghost btn-sm" data-unban="${b.pid}" data-ugame="${b.game}">Liberar</button></div>`).join('') : '<p class="hint">Ninguém suspenso.</p>'}</div>
 
     <div class="card"><h2>Admin · Fechar a lista</h2>
       <p class="hint">${lk.reason === 'manual' ? `Fechada até ${fmtDay(lk.until)}.` : lk.reason === 'notOpen' ? `O check-in abre ${h(opensText(S.current))}.` : 'O check-in está aberto.'} Use isto só se precisar travar a lista fora do horário normal.</p>
@@ -654,13 +665,21 @@ function filterList() {
   document.querySelectorAll('#main .row[data-n]').forEach(r => { r.hidden = !!q && !r.dataset.n.includes(q); });
   document.querySelectorAll('#main .card[data-sec]').forEach(c => { c.hidden = !!q && !c.querySelector('.row[data-n]:not([hidden])'); });
 }
+let confirmFn = null;
+function openConfirm(text, yes, fn) {
+  confirmFn = fn;
+  const sh = $('#sheet');
+  sh.innerHTML = `<div class="sheet-in" role="alertdialog" aria-modal="true" aria-label="Confirmar"><h2>Tem certeza?</h2><p>${h(text)}</p>
+    <div class="btns"><button class="btn btn-ghost" data-act="close-sheet">Voltar</button><button class="btn btn-danger" data-act="confirm-yes">${h(yes)}</button></div></div>`;
+  sh.hidden = false;
+}
 function closeSheet() { $('#sheet').hidden = true; $('#sheet').innerHTML = ''; }
 
 /* ---------- Eventos ---------- */
 let toastTimer;
 function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, err ? 4000 : 2200); }
 const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
-const readSched = () => [...document.querySelectorAll('[data-sched]')].map(r => { const i = r.dataset.sched; return { day: Number(val('sc-day-' + i)), start: val('sc-start-' + i), end: val('sc-end-' + i), openDay: Number(val('sc-oday-' + i)), openTime: val('sc-otime-' + i), max: Number(val('sc-max-' + i)), teams: Number(val('sc-teams-' + i)), fixed: document.getElementById('sc-fixed-' + i).checked, guests: document.getElementById('sc-guests-' + i).checked, private: document.getElementById('sc-priv-' + i).checked }; });
+const readSched = () => [...document.querySelectorAll('[data-sched]')].map(r => { const i = r.dataset.sched; return { day: Number(val('sc-day-' + i)), start: val('sc-start-' + i), end: val('sc-end-' + i), openDay: Number(val('sc-oday-' + i)), openTime: val('sc-otime-' + i), cutoff: val('sc-cut-' + i), max: Number(val('sc-max-' + i)), teams: Number(val('sc-teams-' + i)), fixed: document.getElementById('sc-fixed-' + i).checked, guests: document.getElementById('sc-guests-' + i).checked, private: document.getElementById('sc-priv-' + i).checked }; });
 
 function armed(btn) {
   if (!btn.hasAttribute('data-confirm') || btn.dataset.armed) return true;
@@ -677,6 +696,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.pick) { me = t.dataset.pick; store.set('me', me); closeSheet(); await refresh(); toast('Oi, ' + P(me).name + '!'); return; }
   if (t.dataset.game) { sel = t.dataset.game; store.set('game', sel); aliasGame(); render(); return; }
   if (t.dataset.priv) return act({ type: 'togglePriv', id: t.dataset.priv });
+  if (t.dataset.unban) return act({ type: 'unban', pid: t.dataset.unban, game: t.dataset.ugame }, 'Liberado.');
   if (t.dataset.paid) return act({ type: 'togglePaid', id: t.dataset.paid });
   if (t.dataset.fixed) return act({ type: 'toggleFixed', id: t.dataset.fixed });
   if (t.dataset.schedrm) return act({ type: 'schedule', schedule: readSched().filter((g, i) => i !== Number(t.dataset.schedrm)) }, 'Dia removido.');
@@ -693,7 +713,8 @@ document.addEventListener('click', async e => {
       me = r.id; store.set('me', me); closeSheet(); await refresh(); toast('Cadastrado! Oi, ' + P(me).name + '!'); return;
     }
     case 'bulk-add': return act({ type: 'bulkAdd', text: val('bulk-text'), gender: val('bulk-gender'), priv: document.getElementById('bulk-priv').checked }, null, ['bulk-text']).then(ok => { if (ok && lastResult && lastResult.added != null) toast(`${lastResult.added} cadastrado${lastResult.added === 1 ? '' : 's'}${lastResult.skipped ? `, ${lastResult.skipped} já existia${lastResult.skipped === 1 ? '' : 'm'}` : ''}.`); });
-    case 'close-sheet': return closeSheet();
+    case 'close-sheet': confirmFn = null; return closeSheet();
+    case 'confirm-yes': { const f = confirmFn; confirmFn = null; closeSheet(); if (f) await f(); return; }
     case 'addGuest': return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill') }, 'Convidado adicionado.', ['g-name']);
     case 'draw': return act({ type: 'draw' }, 'Times sorteados!');
     case 'photo-del': return act({ type: 'photo', pid: me, photo: null }, 'Foto removida.');
@@ -715,7 +736,15 @@ document.addEventListener('click', async e => {
 
 document.addEventListener('change', e => {
   const t = e.target;
-  if (t.dataset.toggle) return act({ type: t.checked ? 'join' : 'leave', pid: t.dataset.toggle });
+  if (t.dataset.toggle) {
+    const pid = t.dataset.toggle, g = S.current;
+    if (!t.checked && pid === me && !isAdmin && g && now() >= g.cutoffAt && now() < g.endAt && D.regular.includes(pid)) {
+      t.checked = true;
+      const nx = LG.nextInSeries(RAW, g);
+      return openConfirm(`Já passou das ${g.cutoff} do dia do jogo. Se você tirar seu nome agora, fica fora do ${nx ? `vôlei de ${LG.DAYS[nx.day].toLowerCase()} (${fmtDM(nx.id)})` : 'próximo jogo'}.`, 'Tirar mesmo assim', () => act({ type: 'leave', pid }));
+    }
+    return act({ type: t.checked ? 'join' : 'leave', pid });
+  }
   if (t.dataset.edit) { const q = P(t.dataset.edit); if (!q) return; return act(Object.assign({ type: 'savePlayer' }, q, { [t.dataset.field]: t.value }), 'Salvo.'); }
   if (t.id === 'photo-in' && t.files && t.files[0]) return uploadPhoto(t.files[0]);
 });
@@ -747,7 +776,7 @@ function applyTheme() {
 async function boot() {
   applyTheme();
   try { applyPayload(await Backend.load()); }
-  catch (e) { mode = 'demo'; demo = store.get('demoState6', null) || seedDemo(); store.set('demoState6', demo); applyPayload(demoPayload()); }
+  catch (e) { mode = 'demo'; demo = store.get('demoState7', null) || seedDemo(); store.set('demoState7', demo); applyPayload(demoPayload()); }
   render();
   if (mode === 'server') { setInterval(poll, 8000); document.addEventListener('visibilitychange', poll); }
   setInterval(() => { if (S) { const lk = JSON.stringify(LG.lockInfo(S, now())); if (lk !== boot.lk) { boot.lk = lk; render(); } } }, 30000);

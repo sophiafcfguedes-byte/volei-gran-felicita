@@ -8,10 +8,10 @@
   const DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
   const DAYS_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
   const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-  const SETTINGS_VERSION = 5;
+  const SETTINGS_VERSION = 6;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'lockNow', 'unlock', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
@@ -31,7 +31,7 @@
   }
 
   function initialState() {
-    return { settings: defaultSettings(), players: [], games: {}, suggestions: [], history: [], seq: 1 };
+    return { settings: defaultSettings(), players: [], games: {}, bans: [], suggestions: [], history: [], seq: 1 };
   }
 
   function newId(s, prefix) {
@@ -60,6 +60,7 @@
         out.push({
           id: isoDate(y, m, d), day: g.day, start: g.start, end: g.end, startAt, endAt,
           openAt: spTs(y, m, d - before, g.openTime), openDay: g.openDay, openTime: g.openTime,
+          cutoff: g.cutoff || '17:00', cutoffAt: spTs(y, m, d, g.cutoff || '17:00'),
           max: Number(g.max) || 24, teams: Number(g.teams) || 4, private: !!g.private, fixed: g.fixed !== false, guests: g.guests !== undefined ? !!g.guests : !g.private
         });
         break;
@@ -124,7 +125,10 @@
       /* v5: convidado só nos jogos abertos (segunda e quinta). */
       s.settings.schedule.forEach(g => { if (g.guests === undefined) g.guests = !g.private; });
     }
+    if (s.settings.v < 6) s.settings.schedule.forEach(g => { if (!g.cutoff) g.cutoff = '17:00'; });
     s.settings.v = SETTINGS_VERSION;
+    const today = (() => { const p = spParts(now); return isoDate(p.y, p.m, p.d); })();
+    s.bans = (s.bans || []).filter(b => b.game >= today);
     const act = activeGames(s, now);
     const ids = new Set(act.map(g => g.id));
     for (const id of Object.keys(s.games)) {
@@ -360,7 +364,7 @@
             day, start, end, openDay, openTime,
             max: Math.min(60, Math.max(4, Math.round(Number(g.max) || 24))),
             teams: Math.min(8, Math.max(2, Math.round(Number(g.teams) || 4))),
-            private: !!g.private, fixed: !!g.fixed, guests: !!g.guests
+            private: !!g.private, fixed: !!g.fixed, guests: !!g.guests, cutoff: cleanTime(g.cutoff) || '17:00'
           });
         }
         s.settings.schedule = list.sort((x, y) => x.day - y.day);
@@ -373,6 +377,7 @@
         return ok;
       }
       case 'unlock': s.settings.manualLockUntil = 0; return ok;
+      case 'unban': s.bans = s.bans.filter(b => !(b.pid === a.pid && b.game === a.game)); return ok;
       case 'resetFreq': s.players.forEach(p => { p.freq = 0; }); return ok;
       case 'resetPaid': s.players.forEach(p => { p.paid = false; }); return ok;
       case 'deleteSuggestion': s.suggestions = s.suggestions.filter(x => x.id !== a.id); return ok;
@@ -404,6 +409,8 @@
           v.out = v.out.filter(id => id !== p.id); log('add', p.id); return ok;
         }
         if (!admin && p.id !== a.by && !p.guest) return fail('Cada um só marca o próprio nome.');
+        const ban = !admin && (s.bans || []).find(b => b.pid === p.id && b.game === meta.id);
+        if (ban) return fail(`Você tirou o nome do vôlei de ${DAYS[ban.fromDay].toLowerCase()} depois das ${ban.cutoff}, então está fora deste jogo.`);
         if (locked) return fail(lockMsg);
         if (v.presences.some(x => x.pid === p.id)) return ok;
         if (!admin && p.id !== a.by && addedByMe() >= limit) return fail(limitMsg);
@@ -422,11 +429,21 @@
         if (!pres) return ok;
         if (!admin && a.pid !== a.by && !(p && p.guest && pres.by === a.by)) return fail(p && p.guest ? 'Só quem trouxe o convidado pode tirar.' : 'Cada um só desmarca o próprio nome.');
         if (locked && lk.reason !== 'notOpen') return fail(lockMsg);
-        const before = v.presences.length;
+        const wasConfirmed = derive(v).confirmed.includes(a.pid);
         v.presences = v.presences.filter(x => x.pid !== a.pid);
-        if (v.presences.length === before) return ok;
         delete v.roles[a.pid];
         log('remove', a.pid);
+        /* Desistência no dia do jogo depois do horário-limite: fica fora do próximo jogo da mesma sequência. */
+        if (!admin && p && !p.guest && a.pid === a.by && wasConfirmed && now >= meta.cutoffAt && now < meta.endAt) {
+          const nx = nextInSeries(s, meta);
+          if (nx) {
+            s.bans = (s.bans || []).filter(b => !(b.pid === p.id && b.game === nx.id));
+            s.bans.push({ pid: p.id, game: nx.id, nextDay: nx.day, from: meta.id, fromDay: meta.day, cutoff: meta.cutoff, private: !!meta.private, ts: now });
+            const g2 = s.games[nx.id];
+            if (g2) g2.presences = g2.presences.filter(x => x.pid !== p.id);
+            return { ok: true, banned: nx.id, bannedDay: nx.day };
+          }
+        }
         return ok;
       }
       case 'addGuest': {
@@ -474,6 +491,12 @@
     return fail('Ação desconhecida.');
   }
 
+  /* O próximo jogo da mesma sequência (segunda/quinta juntas; jogos fechados juntos). */
+  function nextInSeries(s, meta) {
+    const after = activeGames(s, meta.endAt + 1).filter(g => g.private === !!meta.private && g.startAt > meta.startAt);
+    return after[0] || null;
+  }
+
   /* O que cada pessoa recebe: sem nível (só admin), sem sugestões (só admin) e sem
      os jogos fechados para quem não tem a bolinha. */
   function publicState(s, isAdmin, meId) {
@@ -484,7 +507,8 @@
     for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
     const players = s.players.map(p => { const q = Object.assign({}, p); delete q.skill; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
-    return Object.assign({}, s, { players, games, settings, suggestions: [] });
+    const bans = (s.bans || []).filter(b => !b.private || priv);
+    return Object.assign({}, s, { players, games, settings, bans, suggestions: [] });
   }
 
   /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */
@@ -502,5 +526,5 @@
     return out.join('\n').trim();
   }
 
-  return { resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  return { nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });
