@@ -647,7 +647,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     const lockMsg = lk.reason === 'notOpen' ? 'O check-in ainda não abriu.' : 'A lista está fechada agora.';
     const locked = lk.locked && !admin;
     const log = (act, pid) => { v.log.unshift({ ts: now, by: me ? me.id : null, act, pid: pid || null }); if (v.log.length > 300) v.log.length = 300; };
-    const addedByMe = () => v.presences.filter(x => x.by === a.by && x.pid !== a.by).length;
+    const addedByMe = () => v.presences.filter(x => x.by === a.by && x.pid !== a.by && pm[x.pid] && pm[x.pid].guest).length;
     const limitMsg = limit ? `Você já trouxe ${limit} convidado${limit > 1 ? 's' : ''}. Esse é o limite.` : 'Esse grupo não aceita convidados.';
     const isFixedHere = p => meta.fixed && p.fixed && canSee(meta, p);
 
@@ -944,7 +944,7 @@ function renderHeader() {
 function renderWho() {
   const p = me && P(me);
   if (!p) return `<div class="card who"><div class="grow"><b>Quem é você?</b><div class="hint">Escolha seu nome pra fazer check-in.</div></div><button class="btn btn-primary" data-act="whoami">Escolher</button></div>`;
-  const mine = S.presences.filter(x => x.by === me && x.pid !== me).length, lim = S.settings.guestLimit;
+  const mine = S.presences.filter(x => x.by === me && x.pid !== me && P(x.pid) && P(x.pid).guest).length, lim = S.settings.guestLimit;
   const allowG = !S.current || S.current.guests !== false;
   const sub = p.fixed && S.current && S.current.fixed ? 'Você tem vaga garantida da comissão' : allowG && lim ? `Você só marca o seu nome · trouxe ${mine} de ${lim} convidado${lim > 1 ? 's' : ''}` : 'Você só marca e desmarca o seu nome';
   return `<div class="card who">${avatar(p)}<div class="grow"><b>${h(p.name)}</b><div class="hint">${sub}</div></div><button class="link" data-act="whoami">Trocar</button></div>`;

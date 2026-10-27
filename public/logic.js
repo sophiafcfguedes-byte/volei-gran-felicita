@@ -389,7 +389,7 @@
     const lockMsg = lk.reason === 'notOpen' ? 'O check-in ainda não abriu.' : 'A lista está fechada agora.';
     const locked = lk.locked && !admin;
     const log = (act, pid) => { v.log.unshift({ ts: now, by: me ? me.id : null, act, pid: pid || null }); if (v.log.length > 300) v.log.length = 300; };
-    const addedByMe = () => v.presences.filter(x => x.by === a.by && x.pid !== a.by).length;
+    const addedByMe = () => v.presences.filter(x => x.by === a.by && x.pid !== a.by && pm[x.pid] && pm[x.pid].guest).length;
     const limitMsg = limit ? `Você já trouxe ${limit} convidado${limit > 1 ? 's' : ''}. Esse é o limite.` : 'Esse grupo não aceita convidados.';
     const isFixedHere = p => meta.fixed && p.fixed && canSee(meta, p);
 
