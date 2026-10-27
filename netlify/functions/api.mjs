@@ -3,6 +3,7 @@
 import { getStore } from '@netlify/blobs';
 import { createHash } from 'node:crypto';
 import L from '../../public/logic.js';
+import Auth from '../../lib/auth.js';
 
 const KEY = 'estado';
 
@@ -22,11 +23,14 @@ export default async (req) => {
   const token = pw ? createHash('sha256').update('volei:' + pw).digest('hex') : null;
   const isAdmin = !!token && req.headers.get('x-admin-token') === token;
   const store = getStore({ name: 'volei', consistency: 'strong' });
+  const secret = 'gf-auth:' + pw;
   const payload = (state, extra, meId) => Object.assign({}, extra, { version: (state.updatedAt || 0) + ':' + (meId || ''), isAdmin, now: Date.now(), state: L.publicState(state, isAdmin, meId) });
 
   if (url.pathname === '/api/state' && req.method === 'GET') {
     const { state } = await load(store);
-    return json(payload(state, null, url.searchParams.get('me')));
+    const asked = url.searchParams.get('me');
+    const me = Auth.who(state, secret, asked, url.searchParams.get('auth'));
+    return json(payload(state, { meOk: !asked || !!me || isAdmin }, me || (isAdmin ? asked : null)));
   }
 
   if (url.pathname === '/api/resumo' && req.method === 'GET') {
@@ -48,13 +52,18 @@ export default async (req) => {
     /* Grava só se ninguém mudou a lista no meio do caminho; senão relê e tenta de novo. */
     for (let attempt = 0; attempt < 6; attempt++) {
       const { state, etag } = await load(store);
+      /* Quem age em nome de um jogador precisa ter entrado com a senha dele. */
+      if (a.type !== 'loginPlayer' && a.by && !isAdmin && !Auth.who(state, secret, a.by, a.auth))
+        return json(payload(state, { ok: false, authFail: true, error: 'Entre de novo com sua senha.' }, null));
       const r = L.apply(state, a, { isAdmin, now: Date.now() });
-      if (!r.ok) return json(payload(state, r, a.by));
+      if (r.ok && a.type === 'loginPlayer') { const p = state.players.find(x => x.id === r.pid); r.auth = Auth.token(secret, r.pid, p.pin); }
+      const meId = r.ok && a.type === 'loginPlayer' ? r.pid : a.by;
+      if (!r.ok && a.type !== 'loginPlayer') return json(payload(state, r, meId));
       state.updatedAt = Date.now();
       const res = etag
         ? await store.setJSON(KEY, state, { onlyIfMatch: etag })
         : await store.setJSON(KEY, state, { onlyIfNew: true });
-      if (!res || res.modified !== false) return json(payload(state, r, a.by));
+      if (!res || res.modified !== false) return json(payload(state, r, r.ok ? meId : null));
       await new Promise(ok => setTimeout(ok, 60 + Math.random() * 140));
     }
     return json({ ok: false, error: 'Muita gente mexendo ao mesmo tempo. Tente de novo.' });

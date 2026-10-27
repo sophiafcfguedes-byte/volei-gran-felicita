@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const L = require('./public/logic.js');
+const Auth = require('./lib/auth.js');
 
 const PORT = Number(process.env.PORT) || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -24,6 +25,7 @@ function save() {
   fs.renameSync(tmp, DATA_FILE);
 }
 
+const SECRET = 'gf-auth:' + ADMIN_PASSWORD;
 const adminToken = ADMIN_PASSWORD ? crypto.createHash('sha256').update('volei:' + ADMIN_PASSWORD).digest('hex') : null;
 const isAdmin = req => !!adminToken && req.headers['x-admin-token'] === adminToken;
 
@@ -48,7 +50,9 @@ http.createServer(async (req, res) => {
     if (url.pathname === '/api/state' && req.method === 'GET') {
       const adm = isAdmin(req);
       L.normalize(state, Date.now());
-      return send(res, 200, { version: version + ':' + (url.searchParams.get('me') || ''), isAdmin: adm, now: Date.now(), state: L.publicState(state, adm, url.searchParams.get('me')) });
+      const asked = url.searchParams.get('me');
+      const me = Auth.who(state, SECRET, asked, url.searchParams.get('auth')) || (adm ? asked : null);
+      return send(res, 200, { meOk: !asked || !!me, version: version + ':' + (me || ''), isAdmin: adm, now: Date.now(), state: L.publicState(state, adm, me) });
     }
     if (url.pathname === '/api/action' && req.method === 'POST') {
       const a = await readBody(req);
@@ -58,9 +62,13 @@ http.createServer(async (req, res) => {
         return send(res, 200, { ok: false, error: 'Senha incorreta.' });
       }
       const adm = isAdmin(req);
+      if (a.type !== 'loginPlayer' && a.by && !adm && !Auth.who(state, SECRET, a.by, a.auth))
+        return send(res, 200, { ok: false, authFail: true, error: 'Entre de novo com sua senha.', version, isAdmin: adm, now: Date.now(), state: L.publicState(state, adm, null) });
       const r = L.apply(state, a, { isAdmin: adm, now: Date.now() });
-      if (r.ok) { version = Date.now(); save(); }
-      return send(res, 200, Object.assign(r, { version: version + ':' + (a.by || ''), isAdmin: adm, now: Date.now(), state: L.publicState(state, adm, a.by) }));
+      if (r.ok && a.type === 'loginPlayer') r.auth = Auth.token(SECRET, r.pid, state.players.find(x => x.id === r.pid).pin);
+      const meId = r.ok && a.type === 'loginPlayer' ? r.pid : (r.ok ? a.by : a.by);
+      if (r.ok || a.type === 'loginPlayer') { version = Date.now(); save(); }
+      return send(res, 200, Object.assign(r, { version: version + ':' + (meId || ''), isAdmin: adm, now: Date.now(), state: L.publicState(state, adm, meId) }));
     }
     /* Resumo em texto — útil para o robô do WhatsApp mandar no grupo. */
     if (url.pathname === '/api/resumo' && req.method === 'GET') {

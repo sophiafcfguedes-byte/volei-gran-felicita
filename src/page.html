@@ -98,6 +98,9 @@ main { display: grid; gap: 14px; }
 .pos { font-size: .78rem; font-weight: 700; color: var(--court); font-variant-numeric: tabular-nums; flex: none; min-width: 2.2em; text-align: right; }
 .pos.wait { color: var(--warn); }
 .pos.ban { color: var(--danger); }
+.pinrow { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+.pin { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; }
+#pin-form { display: grid; gap: 10px; }
 .pos.fx { color: var(--ball-ink); background: var(--ball-soft); border: 1px solid var(--ball); border-radius: 999px; padding: 1px 8px; font-size: .72rem; min-width: 0; }
 .opens { grid-template-columns: auto 1fr; align-items: center; background: var(--ball-soft); border-color: var(--ball); }
 .mascot.sm { width: 64px; margin: 0; }
@@ -276,7 +279,8 @@ const ICON = {
 };
 
 let S = null, D = null, version = null, isAdmin = false, mode = 'server', skew = 0;
-let me = store.get('me', null), tab = ['lista','times','freq','mais'].includes(store.get('tab', 'lista')) ? store.get('tab', 'lista') : 'lista', token = store.get('token', null);
+let me = store.get('me', null), tab = ['lista','times','freq','mais'].includes(store.get('tab', 'lista')) ? store.get('tab', 'lista') : 'lista', token = store.get('token', null), auth = store.get('auth', null);
+function logoutPlayer() { me = null; auth = null; store.set('me', null); store.set('auth', null); }
 const hostTheme = document.documentElement.getAttribute('data-theme');
 const now = () => Date.now() + skew;
 
@@ -286,7 +290,7 @@ const demoPayload = () => ({ version: Date.now(), isAdmin: token === 'demo', now
 const Backend = {
   async load() {
     if (mode === 'demo') return demoPayload();
-    const r = await fetch('api/state?me=' + encodeURIComponent(me || ''), { headers: token ? { 'x-admin-token': token } : {}, cache: 'no-store' });
+    const r = await fetch('api/state?me=' + encodeURIComponent(me || '') + '&auth=' + encodeURIComponent(auth || ''), { headers: token ? { 'x-admin-token': token } : {}, cache: 'no-store' });
     if (!r.ok) throw new Error('http ' + r.status);
     const j = await r.json();
     if (!j || !j.state) throw new Error('resposta inválida');
@@ -296,7 +300,7 @@ const Backend = {
     if (mode === 'demo') {
       if (a.type === 'login') return a.password === 'admin' ? { ok: true, token: 'demo' } : { ok: false, error: 'Senha incorreta. Na demonstração a senha é admin.' };
       const r = LG.apply(demo, a, { isAdmin: token === 'demo', now: Date.now() });
-      if (r.ok) store.set('demoState9', demo);
+      if (r.ok) store.set('demoState10', demo);
       return Object.assign(r, demoPayload());
     }
     const r = await fetch('api/action', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'x-admin-token': token } : {}), body: JSON.stringify(a) });
@@ -309,7 +313,7 @@ function seedDemo() {
   const F = [['Sophia', 4], ['Ana', 4], ['Bia', 3], ['Carla', 2], ['Duda', 5], ['Fernanda', 3], ['Júlia', 2], ['Lara', 4], ['Marina', 3], ['Natália', 3], ['Paula', 2]];
   const M = [['Fábio', 4], ['André', 4], ['Bruno', 3], ['Caio', 5], ['Diego', 2], ['Eduardo', 3], ['Felipe', 4], ['Gustavo', 3], ['Henrique', 2], ['Igor', 3], ['João', 5], ['Lucas', 3], ['Mateus', 4], ['Otávio', 3], ['Rafael', 2], ['Tiago', 3], ['Vitor', 4]];
   const PRIV = new Set(['Sophia', 'Fábio', 'Ana', 'Duda', 'Lara', 'Marina', 'André', 'Caio', 'Felipe', 'João', 'Mateus', 'Otávio', 'Vitor', 'Bruno', 'Igor', 'Carla']);
-  const add = (name, g, sk, guest) => { const id = 'd' + (s.seq++); s.players.push({ id, name, gender: g, skill: sk, paid: !guest && Math.random() < .5, guest: !!guest, fixed: name === 'Sophia' || name === 'Fábio', priv: PRIV.has(name), photo: null, freq: guest ? 0 : Math.floor(Math.random() * 25) }); return id; };
+  const add = (name, g, sk, guest) => { const id = 'd' + (s.seq++); s.players.push({ id, name, gender: g, skill: sk, paid: !guest && Math.random() < .5, guest: !!guest, fixed: name === 'Sophia' || name === 'Fábio', priv: PRIV.has(name), pin: guest ? undefined : '123A', photo: null, freq: guest ? 0 : Math.floor(Math.random() * 25) }); return id; };
   F.forEach(([n, k]) => add(n, 'F', k)); M.forEach(([n, k]) => add(n, 'M', k));
   const g1 = add('Pedro', 'M', 3, true), g2 = add('Sofia', 'F', 2, true);
   LG.normalize(s, Date.now());
@@ -333,7 +337,7 @@ function applyPayload(j) {
   RAW = j.state; isAdmin = !!j.isAdmin;
   if (j.now) skew = j.now - Date.now();
   const changed = j.version !== version; version = j.version;
-  if (me && !RAW.players.some(p => p.id === me && !p.guest)) { me = null; store.set('me', null); }
+  if (me && (j.meOk === false || !RAW.players.some(p => p.id === me && !p.guest))) logoutPlayer();
   if (token && !isAdmin) { token = null; store.set('token', null); }
   GL = Object.values(RAW.games || {}).map(g => g.meta).sort((a, b) => a.startAt - b.startAt);
   if (!GL.some(g => g.id === sel)) sel = (GL.find(g => now() >= g.openAt) || GL[0] || {}).id || null;
@@ -354,10 +358,12 @@ async function poll() {
 }
 let lastResult = null;
 async function act(a, okMsg, clear) {
-  a.by = me; if (a.game === undefined) a.game = sel;
+  if (a.by === undefined) a.by = me;
+  a.auth = auth; if (a.game === undefined) a.game = sel;
   let r;
   try { r = await Backend.act(a); } catch (e) { toast('Sem conexão. Tente de novo.', true); render(); return false; }
   if (r.token) { token = r.token; store.set('token', token); }
+  if (r.authFail) { logoutPlayer(); if (r.state) applyPayload(r); render(); toast(r.error, true); openWho(); return false; }
   if (r.state) applyPayload(r);
   else if (r.ok && a.type === 'login') { try { applyPayload(await Backend.load()); } catch (e) {} }
   lastResult = r;
@@ -448,7 +454,7 @@ function renderWho() {
 }
 
 function renderLista() {
-  const demoNote = mode === 'demo' ? '<div class="demo"><b>Demonstração.</b> Os nomes são exemplos e tudo fica só neste aparelho. A senha de admin aqui é <b>admin</b> (admin consegue mexer mesmo com o check-in fechado).</div>' : '';
+  const demoNote = mode === 'demo' ? '<div class="demo"><b>Demonstração.</b> Os nomes são exemplos e tudo fica só neste aparelho. A senha de todo mundo aqui é <b>123A</b>, e a de admin é <b>admin</b>.</div>' : '';
   const priv = S.current && S.current.private;
   const members = S.players.filter(p => !p.guest && (!priv || p.priv)).sort(byName);
   const fxHere = p => !!(S.current && S.current.fixed && p.fixed && (!priv || p.priv));
@@ -614,7 +620,15 @@ function renderMais() {
           <select data-edit="${q.id}" data-field="skill" aria-label="Nível de ${h(q.name)}">${opts(SKILLS, q.skill)}</select>
           <button class="tog setter" aria-pressed="${!!q.paid}" data-paid="${q.id}">pago</button>
           ${q.guest ? '' : `<button class="tog setter" aria-pressed="${!!q.fixed}" data-fixed="${q.id}">comissão</button><button class="tog setter" aria-pressed="${!!q.priv}" data-priv="${q.id}" title="Vê e faz check-in nos jogos fechados">${ICON.ball}${h(privLabel())}</button>`}
-          <button class="btn btn-danger btn-sm" data-del="${q.id}" data-confirm>Excluir</button></div></div>`).join('')}</div></div>
+          <button class="btn btn-danger btn-sm" data-del="${q.id}" data-confirm>Excluir</button></div>
+        ${q.guest ? '' : `<div class="pinrow"><span class="by">Senha:</span> <b class="pin">${q.pin ? h(q.pin) : '<span class="rem">sem senha</span>'}</b> <button class="link" data-newpin="${q.id}">${q.pin ? 'Trocar' : 'Gerar'}</button></div>`}</div>`).join('')}</div></div>
+
+    <div class="card"><h2>Admin · Senhas</h2>
+      <p class="hint">Cada pessoa entra com a própria senha. Cole uma linha por pessoa com o <b>nome</b> e os <b>3 últimos dígitos do CPF</b> (ex.: <b>Ana Souza 482</b>). O app sorteia a letra. Os nomes precisam estar cadastrados igual na lista.</p>
+      <div class="field"><label for="pins-text">Nome e 3 dígitos</label><textarea id="pins-text" placeholder="Ana Souza 482&#10;Bruno 117"></textarea></div>
+      <div class="btns"><button class="btn btn-primary" data-act="bulk-pins">Criar senhas</button><button class="btn btn-ghost" data-act="gen-pins">Senha aleatória pra quem não tem</button></div>
+      <p class="hint">${S.players.filter(q => !q.guest && !q.pin).length} pessoa(s) sem senha.</p>
+      <button class="btn btn-ghost" data-act="copy-pins">Copiar lista de senhas</button></div>
 
     <div class="card"><h2>Admin · Suspensões</h2>
       <p class="hint">Quem tirou o nome no dia do jogo depois do horário-limite fica fora do próximo. Toque em <b>Liberar</b> se foi engano.</p>
@@ -643,10 +657,7 @@ function openWho() {
     <div class="field"><label for="who-q">Digite seu nome</label><input type="search" id="who-q" placeholder="Comece a digitar…" autocomplete="off" autocapitalize="words" enterkeyhint="search"></div>
     <div id="who-list" role="listbox" aria-label="Nomes encontrados">${list.map(p => `<button class="pick" role="option" data-pick="${p.id}" data-n="${h(norm(p.name))}" hidden>${avatar(p)}<span>${h(p.name)}</span></button>`).join('')}</div>
     <p class="hint" id="who-empty">Digite pelo menos uma letra pra ver os nomes.</p>
-    <details class="newme"><summary>Não achei meu nome</summary>
-      <div class="field"><label for="reg-name">Seu nome (como o grupo te chama)</label><input type="text" id="reg-name" maxlength="40" autocomplete="name"></div>
-      <div class="field"><label for="reg-gender">Gênero</label><select id="reg-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
-      <button class="btn btn-primary" data-act="register">Me cadastrar</button></details></div>`;
+    <p class="hint">Não achou seu nome? Fale com a comissão pra ser cadastrado.</p></div>`;
   sh.hidden = false;
   setTimeout(() => { const q = document.getElementById('who-q'); if (q) q.focus(); }, 50);
 }
@@ -678,6 +689,27 @@ function openConfirm(text, yes, fn) {
     <div class="btns"><button class="btn btn-ghost" data-act="close-sheet">Voltar</button><button class="btn btn-danger" data-act="confirm-yes">${h(yes)}</button></div></div>`;
   sh.hidden = false;
 }
+function openPin(pid) {
+  const p = P(pid); if (!p) return;
+  const sh = $('#sheet');
+  sh.innerHTML = `<div class="sheet-in" role="dialog" aria-modal="true" aria-label="Senha"><div class="sec-h"><h2>Oi, ${h(p.name)}!</h2><button class="link" data-act="whoami">Não sou eu</button></div>
+    <form class="field" id="pin-form" data-pid="${pid}"><label for="pin-in">Sua senha</label>
+      <input type="text" id="pin-in" inputmode="text" autocapitalize="characters" autocomplete="one-time-code" maxlength="8" placeholder="Ex.: 123A" style="font-size:1.3rem;letter-spacing:.2em;text-transform:uppercase">
+      <button class="btn btn-primary" type="submit">Entrar</button></form>
+    <p class="hint">A senha são os 3 últimos números do seu CPF + uma letra. A comissão te passa. ${p.hasPin === false ? '<b>Você ainda não tem senha cadastrada.</b>' : ''}</p></div>`;
+  sh.hidden = false;
+  setTimeout(() => { const q = document.getElementById('pin-in'); if (q) q.focus(); }, 50);
+}
+document.addEventListener('submit', async e => {
+  if (e.target.id !== 'pin-form') return;
+  e.preventDefault();
+  const pid = e.target.dataset.pid;
+  let r;
+  try { r = await Backend.act({ type: 'loginPlayer', pid, pin: val('pin-in'), by: null }); } catch (err) { toast('Sem conexão. Tente de novo.', true); return; }
+  if (!r.ok) { toast(r.error || 'Senha errada.', true); const q = document.getElementById('pin-in'); if (q) { q.value = ''; q.focus(); } return; }
+  me = pid; auth = r.auth || 'demo'; store.set('me', me); store.set('auth', auth);
+  closeSheet(); await refresh(); toast('Oi, ' + P(me).name + '!');
+});
 function closeSheet() { $('#sheet').hidden = true; $('#sheet').innerHTML = ''; }
 
 /* ---------- Eventos ---------- */
@@ -698,9 +730,10 @@ document.addEventListener('click', async e => {
   if (!t) { if (e.target.id === 'sheet') closeSheet(); return; }
   if (t.dataset.tab) { tab = t.dataset.tab; store.set('tab', tab); render(); window.scrollTo(0, 0); return; }
   if (!armed(t)) return;
-  if (t.dataset.pick) { me = t.dataset.pick; store.set('me', me); closeSheet(); await refresh(); toast('Oi, ' + P(me).name + '!'); return; }
+  if (t.dataset.pick) return openPin(t.dataset.pick);
   if (t.dataset.game) { sel = t.dataset.game; store.set('game', sel); aliasGame(); render(); return; }
   if (t.dataset.priv) return act({ type: 'togglePriv', id: t.dataset.priv });
+  if (t.dataset.newpin) return act({ type: 'setPin', id: t.dataset.newpin, pin: 'random' }, 'Senha nova criada.');
   if (t.dataset.unban) return act({ type: 'unban', pid: t.dataset.unban, game: t.dataset.ugame }, 'Liberado.');
   if (t.dataset.paid) return act({ type: 'togglePaid', id: t.dataset.paid });
   if (t.dataset.fixed) return act({ type: 'toggleFixed', id: t.dataset.fixed });
@@ -709,7 +742,14 @@ document.addEventListener('click', async e => {
   if (t.dataset.sugdel) return act({ type: 'deleteSuggestion', id: t.dataset.sugdel });
   if (t.dataset.themeSet) { store.set('theme', t.dataset.themeSet); applyTheme(); render(); return; }
   switch (t.dataset.act) {
-    case 'whoami': return openWho();
+    case 'bulk-pins': return act({ type: 'bulkPins', text: val('pins-text') }, null, ['pins-text']).then(ok => { if (ok && lastResult) toast(`${lastResult.added} senha${lastResult.added === 1 ? '' : 's'} criada${lastResult.added === 1 ? '' : 's'}.${lastResult.missing && lastResult.missing.length ? ' Não achei: ' + lastResult.missing.slice(0, 5).join(', ') + (lastResult.missing.length > 5 ? '…' : '') : ''}`, !!(lastResult.missing && lastResult.missing.length)); });
+    case 'gen-pins': return act({ type: 'genPins' }).then(ok => { if (ok && lastResult) toast(`${lastResult.added} senha${lastResult.added === 1 ? '' : 's'} criada${lastResult.added === 1 ? '' : 's'}.`); });
+    case 'copy-pins': {
+      const txt = S.players.filter(q => !q.guest).sort(byName).map(q => `${q.name}: ${q.pin || '(sem senha)'}`).join('\n');
+      try { await navigator.clipboard.writeText(txt); toast('Lista copiada.'); } catch (e) { toast('Não consegui copiar. Tente pelo computador.', true); }
+      return;
+    }
+    case 'whoami': if (me && t.closest('.who')) { logoutPlayer(); await refresh(); } return openWho();
     case 'register': {
       let r;
       try { r = await Backend.act({ type: 'register', name: val('reg-name'), gender: val('reg-gender') }); } catch (e) { toast('Sem conexão. Tente de novo.', true); return; }
@@ -781,7 +821,7 @@ function applyTheme() {
 async function boot() {
   applyTheme();
   try { applyPayload(await Backend.load()); }
-  catch (e) { mode = 'demo'; demo = store.get('demoState9', null) || seedDemo(); store.set('demoState9', demo); applyPayload(demoPayload()); }
+  catch (e) { mode = 'demo'; demo = store.get('demoState10', null) || seedDemo(); store.set('demoState10', demo); applyPayload(demoPayload()); }
   render();
   if (mode === 'server') { setInterval(poll, 8000); document.addEventListener('visibilitychange', poll); }
   setInterval(() => { if (S) { const lk = JSON.stringify(LG.lockInfo(S, now())); if (lk !== boot.lk) { boot.lk = lk; render(); } } }, 30000);

@@ -11,7 +11,7 @@
   const SETTINGS_VERSION = 6;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
@@ -242,6 +242,11 @@
     return T.map(t => t.m.map(x => x.id));
   }
 
+  const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const randomLetter = () => LETTERS[Math.floor(Math.random() * LETTERS.length)];
+  const randomPin = () => String(Math.floor(Math.random() * 1000)).padStart(3, '0') + randomLetter();
+  const normPin = v => String(v || '').replace(/\s+/g, '').toUpperCase();
+  const fold = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
   const cleanName = v => String(v || '').replace(/\s+/g, ' ').trim().slice(0, 40);
   const clampSkill = v => Math.min(5, Math.max(1, Math.round(Number(v) || 3)));
   const cleanTime = v => /^\d{2}:\d{2}$/.test(String(v)) ? String(v) : null;
@@ -256,7 +261,7 @@
     const limit = Number(s.settings.guestLimit) || 0;
 
     if (ADMIN_ONLY.has(a.type) && !admin) return fail('Só quem é admin pode fazer isso.');
-    if (!ADMIN_ONLY.has(a.type) && !me && !admin && a.type !== 'suggest' && a.type !== 'register') return fail('Escolha quem você é antes (no topo da lista).');
+    if (!ADMIN_ONLY.has(a.type) && !me && !admin && a.type !== 'suggest' && a.type !== 'register' && a.type !== 'loginPlayer') return fail('Escolha quem você é antes (no topo da lista).');
 
     /* ---------- ações de um jogo ---------- */
     if (GAME_ACTIONS.has(a.type)) {
@@ -270,7 +275,50 @@
     }
 
     switch (a.type) {
+      case 'loginPlayer': {
+        const p = pm[a.pid];
+        if (!p || p.guest) return fail('Escolha seu nome na lista.');
+        if (!p.pin) return fail('Você ainda não tem senha. Peça pra comissão.');
+        if (p.lockUntil && p.lockUntil > now) return fail(`Muitas tentativas erradas. Tente de novo depois das ${new Date(p.lockUntil + SP).toISOString().slice(11, 16)}.`);
+        if (normPin(a.pin) !== normPin(p.pin)) {
+          p.fails = (p.fails || 0) + 1;
+          if (p.fails >= 5) { p.lockUntil = now + 15 * 60000; p.fails = 0; return fail('Senha errada 5 vezes. Espere 15 minutos.'); }
+          return fail(`Senha errada. Tentativa ${p.fails} de 5.`);
+        }
+        p.fails = 0; p.lockUntil = 0;
+        return { ok: true, pid: p.id };
+      }
+      case 'setPin': {
+        const p = pm[a.id];
+        if (!p || p.guest) return fail('Jogador não encontrado.');
+        const pin = a.pin === 'random' ? randomPin() : normPin(a.pin);
+        if (!/^[0-9A-Z]{3,8}$/.test(pin)) return fail('A senha precisa ter de 3 a 8 letras ou números.');
+        p.pin = pin; p.fails = 0; p.lockUntil = 0;
+        return { ok: true, pin };
+      }
+      case 'genPins': {
+        let n = 0;
+        s.players.forEach(p => { if (!p.guest && !p.pin) { p.pin = randomPin(); n++; } });
+        return { ok: true, added: n };
+      }
+      case 'bulkPins': {
+        /* Uma linha por pessoa: "Nome 123" (o app sorteia a letra) ou "Nome 123K". */
+        const lines = String(a.text || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean).slice(0, 300);
+        if (!lines.length) return fail('Cole pelo menos uma linha.');
+        const byName = {};
+        s.players.forEach(p => { if (!p.guest) byName[fold(p.name)] = p; });
+        let done = 0; const missing = [];
+        for (const line of lines) {
+          const m = line.match(/^(.*?)[\s;,\t]+(\d{3})([a-zA-Z]?)$/);
+          if (!m) { missing.push(line); continue; }
+          const p = byName[fold(m[1])];
+          if (!p) { missing.push(cleanName(m[1])); continue; }
+          p.pin = m[2] + (m[3] ? m[3].toUpperCase() : randomLetter()); p.fails = 0; p.lockUntil = 0; done++;
+        }
+        return { ok: true, added: done, missing };
+      }
       case 'register': {
+        if (!admin) return fail('Pra entrar no grupo, fale com a comissão.');
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva seu nome.');
         if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha seu gênero.');
@@ -403,7 +451,6 @@
     const meta = v.current;
     const lk = lockInfo(v, now);
     const lockMsg = lk.reason === 'notOpen' ? 'O check-in ainda não abriu.' : lk.reason === 'closed' ? `A lista fechou às ${meta.cutoff}.` : 'A lista está fechada agora.';
-    const addFrozen = id => { if (v.frozen && admin && !v.frozen.includes(id)) v.frozen.push(id); };
     const locked = lk.locked && !admin;
     const log = (act, pid) => { v.log.unshift({ ts: now, by: me ? me.id : null, act, pid: pid || null }); if (v.log.length > 300) v.log.length = 300; };
     const addedByMe = () => v.presences.filter(x => x.by === a.by && x.pid !== a.by && pm[x.pid] && pm[x.pid].guest).length;
@@ -418,16 +465,16 @@
         if (p.guest && !meta.guests && !admin) return fail('Esse jogo não aceita convidados.');
         if (isFixedHere(p)) {
           if (!admin && a.pid !== a.by) return fail('Só a própria pessoa ou um admin mexe na vaga da comissão.');
-          v.out = v.out.filter(id => id !== p.id); addFrozen(p.id); log('add', p.id); return ok;
+          if (lk.reason === 'closed') return fail(lockMsg);
+          v.out = v.out.filter(id => id !== p.id); log('add', p.id); return ok;
         }
         if (!admin && p.id !== a.by && !p.guest) return fail('Cada um só marca o próprio nome.');
         const ban = !admin && (s.bans || []).find(b => b.pid === p.id && b.game === meta.id);
         if (ban) return fail(`Você tirou o nome do vôlei de ${DAYS[ban.fromDay].toLowerCase()} depois das ${ban.cutoff}, então está fora deste jogo.`);
-        if (locked) return fail(lockMsg);
+        if (lk.reason === 'closed' || locked) return fail(lockMsg);
         if (v.presences.some(x => x.pid === p.id)) return ok;
         if (!admin && p.id !== a.by && addedByMe() >= limit) return fail(limitMsg);
         v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now });
-        addFrozen(p.id);
         log('add', p.id);
         return ok;
       }
@@ -461,13 +508,14 @@
       }
       case 'addGuest': {
         if (!meta.guests && !admin) return fail('Esse jogo não aceita convidados.');
-        if (locked) return fail(lockMsg);
+        if (lk.reason === 'closed' || locked) return fail(lockMsg);
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva o nome do convidado.');
         if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero do convidado.');
         if (!admin && addedByMe() >= limit) return fail(limitMsg);
-        let p = s.players.find(x => x.name.toLowerCase() === name.toLowerCase());
-        if (p && !p.guest) return fail(`${p.name} já está no grupo. Marque na lista.`);
+        if (me && fold(name) === fold(me.name)) return fail('Esse é o seu nome. Se o convidado for outra pessoa, coloque o sobrenome dele.');
+        let p = s.players.find(x => fold(x.name) === fold(name));
+        if (p && !p.guest) return fail(`Já tem ${p.name} no grupo. Se o convidado for outra pessoa, coloque o sobrenome dele.`);
         if (!p) {
           p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0 };
           s.players.push(p);
@@ -475,7 +523,6 @@
         }
         if (v.presences.some(x => x.pid === p.id)) return fail(`${p.name} já está na lista.`);
         v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now });
-        addFrozen(p.id);
         log('add', p.id);
         return ok;
       }
@@ -519,7 +566,7 @@
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
     for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
-    const players = s.players.map(p => { const q = Object.assign({}, p); delete q.skill; return q; });
+    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.pin; delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => !b.private || priv);
     return Object.assign({}, s, { players, games, settings, bans, suggestions: [] });
@@ -540,5 +587,5 @@
     return out.join('\n').trim();
   }
 
-  return { nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  return { normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });
