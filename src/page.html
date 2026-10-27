@@ -295,7 +295,7 @@ const Backend = {
     if (mode === 'demo') {
       if (a.type === 'login') return a.password === 'admin' ? { ok: true, token: 'demo' } : { ok: false, error: 'Senha incorreta. Na demonstração a senha é admin.' };
       const r = LG.apply(demo, a, { isAdmin: token === 'demo', now: Date.now() });
-      if (r.ok) store.set('demoState4', demo);
+      if (r.ok) store.set('demoState5', demo);
       return Object.assign(r, demoPayload());
     }
     const r = await fetch('api/action', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'x-admin-token': token } : {}), body: JSON.stringify(a) });
@@ -457,7 +457,8 @@ function renderLista() {
     return `<label class="row${on ? ' on' : ''}" data-n="${h(norm(p.name))}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${can ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${p.paid ? '<span class="paid">pago</span>' : ''}${pos[p.id] || (fxHere(p) ? '<span class="pos wait">não vai</span>' : '')}</label>`;
   };
   const section = (title, list) => list.length ? `<div class="card" data-sec><div class="sec-h"><h2>${title}</h2><span class="muted">${list.filter(p => pos[p.id]).length} de ${list.length}</span></div><div class="list">${list.map(row).join('')}</div></div>` : '';
-  const guests = S.players.filter(p => p.guest).sort((a, b) => (pos[b.id] ? 1 : 0) - (pos[a.id] ? 1 : 0) || byName(a, b));
+  const allowGuests = !S.current || S.current.guests !== false;
+  const guests = S.players.filter(p => p.guest && (allowGuests || pos[p.id])).sort((a, b) => (pos[b.id] ? 1 : 0) - (pos[a.id] ? 1 : 0) || byName(a, b));
   const lk = LG.lockInfo(S, now());
   let lockMsg = '';
   if (lk.reason === 'notOpen') lockMsg = `<div class="card opens"><img class="mascot sm" src="${IMG.front}" alt=""><div><b>O check-in abre ${h(opensText(S.current))}</b><div class="hint">${isAdmin ? 'Você é admin e já consegue mexer na lista.' : 'Volte nesse horário. Quem marcar primeiro garante a vaga.'}</div></div></div>`;
@@ -470,7 +471,7 @@ function renderLista() {
     ${section('Mulheres', members.filter(p => p.gender === 'F'))}
     ${section('Homens', members.filter(p => p.gender !== 'F'))}
     ${section('Convidados', guests)}
-    ${edit && S.settings.guestLimit ? `<div class="card"><h2>Trazer um convidado</h2>
+    ${edit && allowGuests && S.settings.guestLimit ? `<div class="card"><h2>Trazer um convidado</h2>
       <div class="field"><label for="g-name">Nome</label><input type="text" id="g-name" maxlength="40" autocomplete="off" placeholder="Nome do convidado"></div>
       <div class="grid2"><div class="field"><label for="g-gender">Gênero</label><select id="g-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
       <div class="field"><label for="g-skill">Nível</label><select id="g-skill">${opts(SKILLS, 3)}</select></div></div>
@@ -540,7 +541,7 @@ function renderMais() {
     <div class="card"><h2>Tema</h2><div class="seg" role="group" aria-label="Tema">
       ${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Escuro']].map(([v, t]) => `<button data-theme-set="${v}" aria-pressed="${theme === v}">${t}</button>`).join('')}</div></div>
     <div class="card"><details><summary>Como a lista funciona</summary><ul class="rules" style="margin-top:10px">
-      ${sched.map(g => `<li><b>${LG.DAYS[g.day]}</b>, das ${h(g.start)} às ${h(g.end)}: ${g.max} vagas${g.fixed ? ' (a comissão já tem vaga garantida)' : ''}. Check-in abre ${LG.DAYS[g.openDay].toLowerCase()} às ${h(g.openTime)}.</li>`).join('')}
+      ${sched.map(g => `<li><b>${LG.DAYS[g.day]}</b>, das ${h(g.start)} às ${h(g.end)}: ${g.max} vagas${g.fixed ? ' (a comissão já tem vaga garantida)' : ''}${g.guests === false ? ', sem convidados' : ''}. Check-in abre ${LG.DAYS[g.openDay].toLowerCase()} às ${h(g.openTime)}.</li>`).join('')}
       <li>As vagas vão por ordem de check-in.</li>
       ${st.paidPriority ? '<li>Quem pagou a vaquinha passa na frente de quem não pagou.</li>' : ''}
       <li>Passou das vagas, entra na lista de espera, que sobe sozinha quando alguém desiste.</li>
@@ -568,6 +569,7 @@ function renderMais() {
         <div class="grid3"><div class="field"><label for="sc-max-${i}">Vagas</label><input type="number" id="sc-max-${i}" min="4" max="60" value="${g.max || 24}"></div>
           <div class="field"><label for="sc-teams-${i}">Times</label><input type="number" id="sc-teams-${i}" min="2" max="8" value="${g.teams || 4}"></div></div>
         <label class="check"><input type="checkbox" id="sc-fixed-${i}"${g.fixed ? ' checked' : ''}> Comissão tem vaga garantida</label>
+        <label class="check"><input type="checkbox" id="sc-guests-${i}"${g.guests !== false ? ' checked' : ''}> Permite convidados</label>
         <label class="check"><input type="checkbox" id="sc-priv-${i}"${g.private ? ' checked' : ''}> ${ICON.ball} Só pra quem tem a bolinha</label></div>`).join('')}
       <div class="btns"><button class="btn btn-ghost" data-act="add-sched">Adicionar dia</button><button class="btn btn-primary" data-act="save-sched">Salvar dias</button></div></div>
 
@@ -655,7 +657,7 @@ function closeSheet() { $('#sheet').hidden = true; $('#sheet').innerHTML = ''; }
 let toastTimer;
 function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, err ? 4000 : 2200); }
 const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
-const readSched = () => [...document.querySelectorAll('[data-sched]')].map(r => { const i = r.dataset.sched; return { day: Number(val('sc-day-' + i)), start: val('sc-start-' + i), end: val('sc-end-' + i), openDay: Number(val('sc-oday-' + i)), openTime: val('sc-otime-' + i), max: Number(val('sc-max-' + i)), teams: Number(val('sc-teams-' + i)), fixed: document.getElementById('sc-fixed-' + i).checked, private: document.getElementById('sc-priv-' + i).checked }; });
+const readSched = () => [...document.querySelectorAll('[data-sched]')].map(r => { const i = r.dataset.sched; return { day: Number(val('sc-day-' + i)), start: val('sc-start-' + i), end: val('sc-end-' + i), openDay: Number(val('sc-oday-' + i)), openTime: val('sc-otime-' + i), max: Number(val('sc-max-' + i)), teams: Number(val('sc-teams-' + i)), fixed: document.getElementById('sc-fixed-' + i).checked, guests: document.getElementById('sc-guests-' + i).checked, private: document.getElementById('sc-priv-' + i).checked }; });
 
 function armed(btn) {
   if (!btn.hasAttribute('data-confirm') || btn.dataset.armed) return true;
@@ -698,7 +700,7 @@ document.addEventListener('click', async e => {
     case 'logout': token = null; store.set('token', null); isAdmin = false; await poll(); render(); return;
     case 'save-settings': return act({ type: 'settings', groupName: val('s-group'), guestLimit: val('s-limit'), paidPriority: document.getElementById('s-prio').checked }, 'Salvo.');
     case 'save-sched': return act({ type: 'schedule', schedule: readSched() }, 'Dias salvos.');
-    case 'add-sched': { const list = readSched(); const used = new Set(list.map(g => g.day)); const day = [1, 2, 3, 4, 5, 6, 0].find(d => !used.has(d)); if (day === undefined) return; list.push({ day, start: '19:00', end: '22:00', openDay: (day + 6) % 7, openTime: '12:00', max: 24, teams: 4, fixed: true, private: false }); return act({ type: 'schedule', schedule: list }, 'Dia adicionado.'); }
+    case 'add-sched': { const list = readSched(); const used = new Set(list.map(g => g.day)); const day = [1, 2, 3, 4, 5, 6, 0].find(d => !used.has(d)); if (day === undefined) return; list.push({ day, start: '19:00', end: '22:00', openDay: (day + 6) % 7, openTime: '12:00', max: 24, teams: 4, fixed: true, guests: true, private: false }); return act({ type: 'schedule', schedule: list }, 'Dia adicionado.'); }
     case 'add-player': return act({ type: 'savePlayer', name: val('np-name'), gender: val('np-gender'), skill: val('np-skill'), paid: document.getElementById('np-paid').checked, fixed: document.getElementById('np-fixed').checked, priv: document.getElementById('np-priv').checked }, 'Jogador cadastrado.', ['np-name']);
     case 'lock': return act({ type: 'lockNow', minutes: val('lk-min') }, 'Lista fechada.');
     case 'unlock': return act({ type: 'unlock' }, 'Lista reaberta.');
@@ -742,7 +744,7 @@ function applyTheme() {
 async function boot() {
   applyTheme();
   try { applyPayload(await Backend.load()); }
-  catch (e) { mode = 'demo'; demo = store.get('demoState4', null) || seedDemo(); store.set('demoState4', demo); applyPayload(demoPayload()); }
+  catch (e) { mode = 'demo'; demo = store.get('demoState5', null) || seedDemo(); store.set('demoState5', demo); applyPayload(demoPayload()); }
   render();
   if (mode === 'server') { setInterval(poll, 8000); document.addEventListener('visibilitychange', poll); }
   setInterval(() => { if (S) { const lk = JSON.stringify(LG.lockInfo(S, now())); if (lk !== boot.lk) { boot.lk = lk; render(); } } }, 30000);
