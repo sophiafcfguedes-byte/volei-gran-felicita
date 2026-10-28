@@ -8,7 +8,7 @@
   const DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
   const DAYS_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
   const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-  const SETTINGS_VERSION = 6;
+  const SETTINGS_VERSION = 7;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
     'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
@@ -126,6 +126,11 @@
       s.settings.schedule.forEach(g => { if (g.guests === undefined) g.guests = !g.private; });
     }
     if (s.settings.v < 6) s.settings.schedule.forEach(g => { if (!g.cutoff) g.cutoff = '17:00'; });
+    if (s.settings.v < 7) {
+      /* v7: níveis de 1–5 para 1–8 (Iniciante N1 … Muito bom N2). */
+      const map = { 1: 1, 2: 2, 3: 3, 4: 5, 5: 7 };
+      s.players.forEach(p => { if (p.skill) p.skill = map[p.skill] || 3; });
+    }
     s.settings.v = SETTINGS_VERSION;
     const today = (() => { const p = spParts(now); return isoDate(p.y, p.m, p.d); })();
     s.bans = (s.bans || []).filter(b => b.game >= today);
@@ -258,7 +263,7 @@
   const normPin = v => String(v || '').replace(/\s+/g, '').toUpperCase();
   const fold = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
   const cleanName = v => String(v || '').replace(/\s+/g, ' ').trim().slice(0, 40);
-  const clampSkill = v => Math.min(5, Math.max(1, Math.round(Number(v) || 3)));
+  const clampSkill = v => Math.min(8, Math.max(1, Math.round(Number(v) || 3)));
   const cleanTime = v => /^\d{2}:\d{2}$/.test(String(v)) ? String(v) : null;
 
   function apply(s, a, ctx) {
@@ -372,7 +377,7 @@
         if (!lines.length) return fail('Cole pelo menos um nome.');
         let added = 0, skipped = 0;
         for (const line of lines) {
-          const m = line.replace(/^[-•*\d.)\s]+(?=\D)/, '').match(/^(.*?)(?:\s+([1-5]))?$/);
+          const m = line.replace(/^[-•*\d.)\s]+(?=\D)/, '').match(/^(.*?)(?:\s+([1-8]))?$/);
           const name = cleanName(m ? m[1] : line);
           if (name.length < 2) continue;
           if (s.players.some(x => x.name.toLowerCase() === name.toLowerCase())) { skipped++; continue; }

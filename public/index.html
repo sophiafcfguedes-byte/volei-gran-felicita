@@ -397,7 +397,7 @@ const locked = () => LG.lockInfo(S, now()).locked && !isAdmin;
 const canEdit = () => (!!me || isAdmin) && !locked();
 const canEditFixed = p => isAdmin || me === p.id;
 const opts = (list, val) => list.map(([v, t]) => `<option value="${h(v)}"${String(v) === String(val) ? ' selected' : ''}>${h(t)}</option>`).join('');
-const SKILLS = [[1, '1 · começando'], [2, '2 · básico'], [3, '3 · médio'], [4, '4 · bom'], [5, '5 · muito bom']];
+const SKILLS = [[1, 'Iniciante N1'], [2, 'Iniciante N2'], [3, 'Médio N1'], [4, 'Médio N2'], [5, 'Bom N1'], [6, 'Bom N2'], [7, 'Muito bom N1'], [8, 'Muito bom N2']];
 const GENDERS = [['F', 'Mulher'], ['M', 'Homem']];
 const DAY_OPTS = LG.DAYS.map((d, i) => [i, d]);
 const privLabel = () => (RAW.settings.schedule || []).filter(g => g.private).map(g => LG.DAYS[g.day].toLowerCase()).join(' e ') || 'jogo fechado';
@@ -614,7 +614,7 @@ function renderMais() {
       <label class="check"><input type="checkbox" id="np-priv"> ${ICON.ball} Liberado pro vôlei de ${h(privLabel())}</label>
       <button class="btn btn-primary" data-act="add-player">Cadastrar</button>
       <details class="bulk"><summary>Cadastrar vários de uma vez</summary>
-        <p class="hint">Cole um nome por linha. Se quiser, coloque o nível no fim (ex.: <b>Ana 4</b>). Sem nível, fica 3. Faça uma vez pras mulheres e outra pros homens.</p>
+        <p class="hint">Cole um nome por linha. Se quiser, coloque o nível no fim, de 1 a 8 (1 = Iniciante N1 … 8 = Muito bom N2; ex.: <b>Ana 5</b>). Sem nível, fica 3 (Médio N1). Faça uma vez pras mulheres e outra pros homens.</p>
         <div class="field"><label for="bulk-gender">Gênero de todos da lista</label><select id="bulk-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
         <div class="field"><label for="bulk-text">Nomes</label><textarea id="bulk-text" placeholder="Ana 4&#10;Bia&#10;Carla 2"></textarea></div>
         <label class="check"><input type="checkbox" id="bulk-priv"> ${ICON.ball} Todos liberados pro vôlei de ${h(privLabel())}</label>
