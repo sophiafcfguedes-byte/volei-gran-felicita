@@ -498,19 +498,30 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       ...bySkill(P.filter(x => !x.st && x.g === 'M'))
     ];
     const T = Array.from({ length: k }, () => ({ m: [], sum: 0, st: 0, f: 0 }));
+    const put = (t, x) => { t.m.push(x); t.sum += x.sk; if (x.st) t.st++; if (x.g === 'F') t.f++; };
+    /* Segunda/quinta: cada time leva obrigatoriamente 1 iniciante (N1/N2) e 1 muito bom (N1/N2).
+       Se não tiver pra todos, os que tem são espalhados e o resto é equilibrado normal. */
+    if (!(v.meta && v.meta.private)) {
+      for (const want of [x => x.sk >= 7, x => x.sk <= 2]) {
+        const pool = shuffle(order.filter(x => !x.lock && want(x)), rand);
+        const ts = shuffle(T.slice(), rand).sort((a, b) => a.sum - b.sum);
+        ts.forEach((t, i) => { const x = pool[i]; if (x) { x.lock = true; put(t, x); } });
+      }
+    }
     for (const x of order) {
+      if (x.lock) continue;
       const open = T.filter(t => t.m.length < cap);
       const key = t => [x.st ? t.st : x.g === 'F' ? t.f : 0, t.sum, t.m.length];
       open.sort((a, b) => { const ka = key(a), kb = key(b); for (let i = 0; i < 3; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i]; return rand() - 0.5; });
-      const t = open[0];
-      t.m.push(x); t.sum += x.sk; if (x.st) t.st++; if (x.g === 'F') t.f++;
+      put(open[0], x);
     }
     const spread = () => { const vals = T.map(t => t.sum); return Math.max(...vals) - Math.min(...vals); };
     for (let it = 0; it < 600; it++) {
       const a = T[Math.floor(rand() * k)], b = T[Math.floor(rand() * k)];
       if (a === b || !a.m.length || !b.m.length) continue;
       const i = Math.floor(rand() * a.m.length), x = a.m[i];
-      const j = b.m.findIndex(y => y.g === x.g && y.st === x.st && y.sk !== x.sk);
+      if (x.lock) continue;
+      const j = b.m.findIndex(y => !y.lock && y.g === x.g && y.st === x.st && y.sk !== x.sk);
       if (j < 0) continue;
       const y = b.m[j], before = spread();
       a.sum += y.sk - x.sk; b.sum += x.sk - y.sk;
