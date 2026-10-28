@@ -1,5 +1,19 @@
 # Vôlei Gran Felicitá
 
+## Rodando na Oracle Cloud (grátis)
+
+Na máquina da Oracle, rode:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sophiafcfguedes-byte/volei-gran-felicita/oracle/scripts/oracle-setup.sh -o oracle-setup.sh && bash oracle-setup.sh
+```
+
+O script instala o que faltar, traz os dados do Netlify, liga o app com HTTPS e mostra o endereço.
+Para atualizar depois: `bash ~/volei-gran-felicita/scripts/update.sh`
+
+---
+
+
 App de celular do grupo: lista de presença, prioridade pra quem pagou a vaquinha, lista de espera, convidados, sorteio de times equilibrado, placar, frequência, sugestões e painel de admin.
 
 ## Colocar no ar no Netlify (link `volei-gran-felicita.netlify.app`)
