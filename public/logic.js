@@ -142,7 +142,12 @@
       else s.games[meta.id].meta = meta;
       /* No horário-limite (17h do dia do jogo) a lista fecha com quem está confirmado. */
       const g = s.games[meta.id];
-      if (!g.frozen && now >= meta.cutoffAt) g.frozen = derive(view(s, meta.id)).confirmed.slice();
+      if (!g.frozen && now >= meta.cutoffAt) {
+        g.frozen = derive(view(s, meta.id)).confirmed.slice();
+        /* Às 17h, com a lista fechada, os times são sorteados sozinhos. */
+        const v = view(s, meta.id), conf = derive(v).confirmed;
+        if (conf.length >= 4) g.teams = { ts: meta.cutoffAt, by: null, auto: true, list: drawTeams(v, conf) };
+      }
     }
     /* Convidado não fica no cadastro: some quando não está em nenhuma lista aberta. */
     const used = new Set();

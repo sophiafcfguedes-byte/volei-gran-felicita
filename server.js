@@ -19,11 +19,21 @@ try { state = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) { /* p
 L.normalize(state, Date.now());
 let version = Date.now();
 
+let lastSaved = '';
 function save() {
+  const json = JSON.stringify(state);
   const tmp = DATA_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(state));
+  fs.writeFileSync(tmp, json);
   fs.renameSync(tmp, DATA_FILE);
+  lastSaved = json;
 }
+/* A cada 20 s: fecha listas às 17h, sorteia os times e vira o jogo, mesmo sem ninguém abrir o app. */
+setInterval(() => {
+  try {
+    L.normalize(state, Date.now());
+    if (JSON.stringify(state) !== lastSaved) { version = Date.now(); save(); }
+  } catch (e) { console.error('normalize', e); }
+}, 20000);
 
 const SECRET = 'gf-auth:' + ADMIN_PASSWORD;
 const adminToken = ADMIN_PASSWORD ? crypto.createHash('sha256').update('volei:' + ADMIN_PASSWORD).digest('hex') : null;

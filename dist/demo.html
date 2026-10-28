@@ -404,7 +404,12 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       else s.games[meta.id].meta = meta;
       /* No horário-limite (17h do dia do jogo) a lista fecha com quem está confirmado. */
       const g = s.games[meta.id];
-      if (!g.frozen && now >= meta.cutoffAt) g.frozen = derive(view(s, meta.id)).confirmed.slice();
+      if (!g.frozen && now >= meta.cutoffAt) {
+        g.frozen = derive(view(s, meta.id)).confirmed.slice();
+        /* Às 17h, com a lista fechada, os times são sorteados sozinhos. */
+        const v = view(s, meta.id), conf = derive(v).confirmed;
+        if (conf.length >= 4) g.teams = { ts: meta.cutoffAt, by: null, auto: true, list: drawTeams(v, conf) };
+      }
     }
     /* Convidado não fica no cadastro: some quando não está em nenhuma lista aberta. */
     const used = new Set();
@@ -1131,11 +1136,11 @@ function renderTimes() {
         const f = ps.filter(p => p.gender === 'F').length;
         return `<section class="team"><header><h3>Time ${i + 1}</h3><span class="small">${ps.length} jogadores</span></header><ul>${ps.map(p => `<li>${avatar(p)}<span>${h(nameOf(p))}</span></li>`).join('')}</ul>
           <footer>${ps.length - f} homens · ${f} mulheres${isAdmin ? ` · nível ${sum}` : ''}${ps.length > 6 ? `<br><b>Time com ${ps.length}:</b> joga quem chegar primeiro, os outros entram no rodízio.` : ''}</footer></section>`; }).join('')}</div>
-      <p class="hint">Sorteado às ${fmtTime(S.teams.ts)}${S.teams.by && P(S.teams.by) ? ' por ' + h(P(S.teams.by).name) : ''}.</p>
+      <p class="hint">${S.teams.auto ? `Sorteado automaticamente às ${fmtTime(S.teams.ts)}, quando a lista fechou` : `Sorteado às ${fmtTime(S.teams.ts)}${S.teams.by && P(S.teams.by) ? ' por ' + h(P(S.teams.by).name) : ''}`}.</p>
       <a class="btn btn-wa" href="${h(waLink(teamsText()))}" target="_blank" rel="noopener">${ICON.wa}Mandar times no WhatsApp</a>`;
   }
   return `<div class="card"><h2>Sorteio dos times</h2>
-      <p class="hint">${S.settings.teams || 4} times, equilibrados entre homens e mulheres e pelo nível de cada um. Entram os ${D.confirmed.length} confirmados${D.confirmed.length >= 4 ? ` (${nT} times de ${Math.floor(D.confirmed.length / nT)}${D.confirmed.length % nT ? ' ou ' + Math.ceil(D.confirmed.length / nT) : ''})` : ''}.</p>
+      <p class="hint">${S.settings.teams || 4} times, equilibrados entre homens e mulheres e pelo nível de cada um. Entram os ${D.confirmed.length} confirmados${D.confirmed.length >= 4 ? ` (${nT} times de ${Math.floor(D.confirmed.length / nT)}${D.confirmed.length % nT ? ' ou ' + Math.ceil(D.confirmed.length / nT) : ''})` : ''}. Às ${S.current ? h(S.current.cutoff) : '17:00'} do dia do jogo, quando a lista fecha, os times são sorteados sozinhos.</p>
       <button class="btn btn-ball" data-act="draw"${conf.length >= 4 && enabled ? '' : ' disabled'} style="font-size:1.05rem">${ICON.shuffle}Sortear times</button>
       ${!enabled ? '<p class="hint">Escolha quem você é na aba Lista pra sortear.</p>' : conf.length < 4 ? '<p class="hint">Precisa de pelo menos 4 confirmados.</p>' : ''}
     </div>
