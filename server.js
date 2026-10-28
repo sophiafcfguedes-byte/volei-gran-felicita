@@ -81,6 +81,13 @@ http.createServer(async (req, res) => {
       return send(res, 200, Object.assign(r, { version: version + ':' + (meId || ''), isAdmin: adm, now: Date.now(), state: L.publicState(state, adm, meId) }));
     }
     /* Resumo em texto — útil para o robô do WhatsApp mandar no grupo. */
+    if (url.pathname === '/api/avisos' && req.method === 'GET') {
+      /* Só para o robô, na própria máquina: quem vem de fora passa pelo Caddy, que manda X-Forwarded-For. */
+      const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress) && !req.headers['x-forwarded-for'];
+      if (!local) return send(res, 404, { error: 'não encontrado' });
+      L.normalize(state, Date.now());
+      return send(res, 200, L.avisos(state));
+    }
     if (url.pathname === '/api/resumo' && req.method === 'GET') {
       L.normalize(state, Date.now());
       return send(res, 200, L.resumo(state), 'text/plain; charset=utf-8');

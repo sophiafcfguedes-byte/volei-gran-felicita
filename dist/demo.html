@@ -870,7 +870,26 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     return out.join('\n').trim();
   }
 
-  return { normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  /* Situação de cada jogo para o robô do WhatsApp avisar quando a lista completa
+     (jogo fechado → grupo da quarta; os outros → grupo principal). Só para uso interno. */
+  function avisos(s) {
+    const pm = playerMap(s), out = [];
+    const nm = id => pm[id] ? pm[id].name + (pm[id].guest ? ' (C)' : '') : '?';
+    for (const g of Object.values(s.games).sort((a, b) => a.meta.startAt - b.meta.startAt)) {
+      const d = derive(view(s, g.meta.id));
+      const p = spParts(g.meta.startAt);
+      const dd = String(p.d).padStart(2, '0') + '/' + String(p.m + 1).padStart(2, '0');
+      const lines = [`🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} — ${dd}* (${g.meta.start} às ${g.meta.end})`,
+        `✅ Lista completa: ${d.confirmed.length}/${g.meta.max}`, '',
+        ...d.fixed.map(id => `⭐ ${nm(id)}`), ...d.regular.map((id, i) => `${i + 1}. ${nm(id)}`)];
+      if (d.waitlist.length) lines.push('', '*Lista de espera*', ...d.waitlist.map((id, i) => `${i + 1}. ${nm(id)}`));
+      lines.push('', `Quem desistir até as ${g.meta.cutoff} libera a vaga pra espera.`);
+      out.push({ id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
+    }
+    return { games: out };
+  }
+
+  return { avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });
 
 </script>
