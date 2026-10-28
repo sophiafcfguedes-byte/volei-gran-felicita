@@ -64,6 +64,14 @@ async function avisosTick() {
       if (old) { await wait(1500); try { await sock.sendMessage(groupId, { delete: old }); } catch (e) { logErr('Não consegui apagar a lista anterior:', e.message); } }
     } catch (e) { logErr('Não consegui mandar a lista:', e.message); }
   }
+  // Times sorteados às 17h: manda uma vez no grupo do jogo.
+  for (const g of data.games || []) {
+    const groupId = rt[g.group]?.groupId;
+    if (!groupId || !g.teams || state.avisos[g.teams.key]) continue;
+    state.avisos[g.teams.key] = Date.now(); saveState();
+    try { await sock.sendMessage(groupId, { text: g.teams.text }); log('Times enviados (' + g.id + ').'); }
+    catch (e) { logErr('Não consegui mandar os times:', e.message); }
+  }
   for (const k of Object.keys(state.avisos)) if (Date.now() - state.avisos[k] > 10 * 864e5) { delete state.avisos[k]; delete state.avisoMsgs[k]; }
 }
 setInterval(() => avisosTick().catch((e) => logErr('avisos:', e.message)), 30_000);

@@ -642,7 +642,13 @@
       lines.push('', `Quem desistir até as ${g.meta.cutoff} libera a vaga pra espera.`);
       const who = id => pm[id] ? { pid: id, name: pm[id].name, phone: pm[id].phone || '', guest: !!pm[id].guest } : null;
       const promos = (g.promos || []).map(x => ({ key: g.meta.id + ':' + x.pid + ':' + x.ts, ...who(x.pid), by: x.by ? who(x.by) : null })).filter(x => x.pid);
-      out.push({ promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
+      let teams = null;
+      if (g.teams && g.teams.auto && g.teams.list.length) {
+        const tl = [`🏐 *TIMES — VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} — ${dd}*`];
+        g.teams.list.forEach((t, i) => { tl.push('', `*Time ${i + 1}*`, ...t.filter(id => pm[id]).map(id => '• ' + nm(id))); });
+        teams = { key: g.meta.id + ':times:' + g.teams.ts, text: tl.join('\n') };
+      }
+      out.push({ teams, promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
     }
     return { games: out };
   }
