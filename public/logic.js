@@ -617,11 +617,20 @@
   }
 
   /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */
+  /* Nome como aparece nas listas: convidado leva quem trouxe entre parênteses — "Maria Bonita (Sophia)". */
+  function labelIn(pm, presences, id) {
+    const p = pm[id];
+    if (!p) return '?';
+    const pr = (presences || []).find(x => x.pid === id);
+    if ((p.guest || (pr && pr.asGuest)) && pr && pr.by && pm[pr.by]) return `${p.name} (${pm[pr.by].name})`;
+    return p.guest ? p.name + ' (C)' : p.name;
+  }
+
   function resumo(s) {
     const pm = playerMap(s), out = [];
-    const nm = id => pm[id].name + (pm[id].guest ? ' (C)' : '');
     for (const g of Object.values(s.games).sort((a, b) => a.meta.startAt - b.meta.startAt)) {
       if (g.meta.private) continue;
+      const nm = id => labelIn(pm, g.presences, id);
       const d = derive(view(s, g.meta.id));
       out.push(`🏐 ${gameTitle(g.meta)} (${gameWhen(g.meta)}) — ${d.confirmed.length}/${g.meta.max}`,
         ...d.fixed.map(id => `⭐ ${nm(id)}`), ...d.regular.map((id, i) => `${i + 1}. ${nm(id)}`));
@@ -635,8 +644,8 @@
      (jogo fechado → grupo da quarta; os outros → grupo principal). Só para uso interno. */
   function avisos(s) {
     const pm = playerMap(s), out = [];
-    const nm = id => pm[id] ? pm[id].name + (pm[id].guest ? ' (C)' : '') : '?';
     for (const g of Object.values(s.games).sort((a, b) => a.meta.startAt - b.meta.startAt)) {
+      const nm = id => labelIn(pm, g.presences, id);
       const d = derive(view(s, g.meta.id));
       const p = spParts(g.meta.startAt);
       const dd = String(p.d).padStart(2, '0') + '/' + String(p.m + 1).padStart(2, '0');
@@ -658,5 +667,5 @@
     return { games: out };
   }
 
-  return { avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  return { labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });

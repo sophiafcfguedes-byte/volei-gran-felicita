@@ -377,7 +377,7 @@ async function act(a, okMsg, clear) {
 
 /* ---------- Utilidades de exibição ---------- */
 const P = id => S.players.find(p => p.id === id);
-const nameOf = p => p ? p.name + (p.guest ? ' (C)' : '') : '—';
+const nameOf = p => p ? LG.labelIn(Object.fromEntries(S.players.map(q => [q.id, q])), S.presences, p.id) : '—';
 const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
 function hue(str) { let x = 0; for (const c of str) x = (x * 31 + c.charCodeAt(0)) % 360; return x; }
 function avatar(p, lg) {

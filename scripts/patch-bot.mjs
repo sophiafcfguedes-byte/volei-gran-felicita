@@ -26,10 +26,10 @@ function tagLine(text, pr, mentions) {
   const jid = jidFor(target);
   if (jid) mentions.push(jid);
   const tag = jid ? '@' + jid.split('@')[0] : '@' + target.name;
-  const shown = pr.guest ? pr.name + ' (C)' : pr.name;
+  const shown = pr.by ? pr.name + ' (' + pr.by.name + ')' : pr.name;
   const esc = shown.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&');
   const re = new RegExp('^(\\\\d+\\\\. )' + esc + '$', 'm');
-  const repl = pr.guest && pr.by ? '$1' + shown + ' (de ' + tag + ')' : '$1' + tag;
+  const repl = pr.guest && pr.by ? '$1' + pr.name + ' (' + tag + ')' : '$1' + tag;
   return re.test(text) ? text.replace(re, repl) : text;
 }
 async function avisosTick() {

@@ -879,11 +879,20 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   }
 
   /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */
+  /* Nome como aparece nas listas: convidado leva quem trouxe entre parênteses — "Maria Bonita (Sophia)". */
+  function labelIn(pm, presences, id) {
+    const p = pm[id];
+    if (!p) return '?';
+    const pr = (presences || []).find(x => x.pid === id);
+    if ((p.guest || (pr && pr.asGuest)) && pr && pr.by && pm[pr.by]) return `${p.name} (${pm[pr.by].name})`;
+    return p.guest ? p.name + ' (C)' : p.name;
+  }
+
   function resumo(s) {
     const pm = playerMap(s), out = [];
-    const nm = id => pm[id].name + (pm[id].guest ? ' (C)' : '');
     for (const g of Object.values(s.games).sort((a, b) => a.meta.startAt - b.meta.startAt)) {
       if (g.meta.private) continue;
+      const nm = id => labelIn(pm, g.presences, id);
       const d = derive(view(s, g.meta.id));
       out.push(`🏐 ${gameTitle(g.meta)} (${gameWhen(g.meta)}) — ${d.confirmed.length}/${g.meta.max}`,
         ...d.fixed.map(id => `⭐ ${nm(id)}`), ...d.regular.map((id, i) => `${i + 1}. ${nm(id)}`));
@@ -897,8 +906,8 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
      (jogo fechado → grupo da quarta; os outros → grupo principal). Só para uso interno. */
   function avisos(s) {
     const pm = playerMap(s), out = [];
-    const nm = id => pm[id] ? pm[id].name + (pm[id].guest ? ' (C)' : '') : '?';
     for (const g of Object.values(s.games).sort((a, b) => a.meta.startAt - b.meta.startAt)) {
+      const nm = id => labelIn(pm, g.presences, id);
       const d = derive(view(s, g.meta.id));
       const p = spParts(g.meta.startAt);
       const dd = String(p.d).padStart(2, '0') + '/' + String(p.m + 1).padStart(2, '0');
@@ -920,7 +929,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     return { games: out };
   }
 
-  return { avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  return { labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });
 
 </script>
@@ -1041,7 +1050,7 @@ async function act(a, okMsg, clear) {
 
 /* ---------- Utilidades de exibição ---------- */
 const P = id => S.players.find(p => p.id === id);
-const nameOf = p => p ? p.name + (p.guest ? ' (C)' : '') : '—';
+const nameOf = p => p ? LG.labelIn(Object.fromEntries(S.players.map(q => [q.id, q])), S.presences, p.id) : '—';
 const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
 function hue(str) { let x = 0; for (const c of str) x = (x * 31 + c.charCodeAt(0)) % 360; return x; }
 function avatar(p, lg) {
