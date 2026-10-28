@@ -156,7 +156,8 @@
     if (!v) return;
     const d = derive(v);
     const pm = playerMap(s);
-    d.confirmed.forEach(pid => { if (pm[pid]) pm[pid].freq = (pm[pid].freq || 0) + 1; });
+    /* Frequência conta só os jogos abertos (segunda e quinta); jogo fechado (quarta) não soma. */
+    if (!v.current.private) d.confirmed.forEach(pid => { if (pm[pid]) pm[pid].freq = (pm[pid].freq || 0) + 1; });
     s.history.unshift({ id, confirmed: d.confirmed });
     if (s.history.length > 90) s.history.length = 90;
   }
@@ -558,7 +559,7 @@
       case 'resetPresences': {
         if (!admin) return fail('Só quem é admin pode fazer isso.');
         const d = derive(v);
-        d.confirmed.forEach(pid => { if (pm[pid]) pm[pid].freq = (pm[pid].freq || 0) + 1; });
+        if (!meta.private) d.confirmed.forEach(pid => { if (pm[pid]) pm[pid].freq = (pm[pid].freq || 0) + 1; });
         s.history.unshift({ id: meta.id, confirmed: d.confirmed });
         v.presences = []; v.out = []; v.roles = {}; v.teams = null; v.log = [];
         return ok;

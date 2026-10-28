@@ -418,7 +418,8 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     if (!v) return;
     const d = derive(v);
     const pm = playerMap(s);
-    d.confirmed.forEach(pid => { if (pm[pid]) pm[pid].freq = (pm[pid].freq || 0) + 1; });
+    /* Frequência conta só os jogos abertos (segunda e quinta); jogo fechado (quarta) não soma. */
+    if (!v.current.private) d.confirmed.forEach(pid => { if (pm[pid]) pm[pid].freq = (pm[pid].freq || 0) + 1; });
     s.history.unshift({ id, confirmed: d.confirmed });
     if (s.history.length > 90) s.history.length = 90;
   }
@@ -820,7 +821,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       case 'resetPresences': {
         if (!admin) return fail('Só quem é admin pode fazer isso.');
         const d = derive(v);
-        d.confirmed.forEach(pid => { if (pm[pid]) pm[pid].freq = (pm[pid].freq || 0) + 1; });
+        if (!meta.private) d.confirmed.forEach(pid => { if (pm[pid]) pm[pid].freq = (pm[pid].freq || 0) + 1; });
         s.history.unshift({ id: meta.id, confirmed: d.confirmed });
         v.presences = []; v.out = []; v.roles = {}; v.teams = null; v.log = [];
         return ok;
@@ -1148,7 +1149,7 @@ function renderFreq() {
   const list = S.players.filter(p => !p.guest || p.freq > 0).slice().sort((a, b) => (b.freq || 0) - (a.freq || 0) || byName(a, b));
   const max = Math.max(1, ...list.map(p => p.freq || 0));
   return `<div class="card"><h2>Quem mais veio</h2>
-    <p class="hint">Quando o jogo acaba, soma 1 pra quem estava confirmado.</p>
+    <p class="hint">Quando o jogo de segunda ou quinta acaba, soma 1 pra quem estava confirmado.</p>
     ${list.length ? `<div class="freq">${list.map(p => `<div class="fbar"><span class="nm">${h(nameOf(p))}</span><span class="track"><span class="fill" style="width:${Math.round((p.freq || 0) / max * 100)}%;display:block"></span></span><b>${p.freq || 0}</b></div>`).join('')}</div>` : '<p class="hint">Ninguém cadastrado ainda.</p>'}
   </div>`;
 }
@@ -1175,7 +1176,7 @@ function renderMais() {
       ${st.paidPriority ? '<li>Quem pagou a vaquinha passa na frente de quem não pagou.</li>' : ''}
       <li>Passou das vagas, entra na lista de espera, que sobe sozinha quando alguém desiste.</li>
       <li>Cada pessoa só marca e desmarca o próprio nome.${st.guestLimit ? ` Nos jogos que aceitam convidados, cada um pode trazer até ${st.guestLimit}, e só quem trouxe pode tirar.` : ''}</li>
-      <li>Quando o jogo acaba, a lista zera sozinha e já mostra o próximo jogo. Quem estava confirmado ganha +1 na frequência.</li>
+      <li>Quando o jogo acaba, a lista zera sozinha e já mostra o próximo jogo. Quem estava confirmado ganha +1 na frequência (só segunda e quinta contam).</li>
       <li>O sorteio monta ${st.teams || 4} times equilibrando homens, mulheres e nível. O nível de cada um só o admin vê.</li>
     </ul></details></div>`;
 
