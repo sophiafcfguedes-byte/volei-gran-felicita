@@ -19,7 +19,11 @@ if [ $NODE_OK = 0 ]; then
   if [ $PKG = apt ]; then curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs
   else curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash - && sudo dnf install -y nodejs; fi
 fi
-command -v pm2 >/dev/null || sudo npm install -g pm2
+if ! command -v pm2 >/dev/null; then
+  NPM="$(command -v npm)"
+  if [ -w "$(npm root -g 2>/dev/null || echo /usr/lib/node_modules)" ]; then "$NPM" install -g pm2; else sudo "$NPM" install -g pm2; fi
+  hash -r
+fi
 echo "Node $(node -v)"
 
 say "2/6 Baixando o app"
