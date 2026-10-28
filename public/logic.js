@@ -10,7 +10,7 @@
   const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const SETTINGS_VERSION = 6;
   const ADMIN_ONLY = new Set([
-    'bulkAdd', 'setPhone', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
+    'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
     'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
@@ -407,6 +407,7 @@
       case 'setPhone': {
         const p = pm[a.id];
         if (!p || p.guest) return fail('Jogador não encontrado.');
+        if (!admin && a.id !== a.by) return fail('Cada um só cadastra o próprio celular.');
         const d = String(a.phone || '').replace(/\D/g, '');
         if (d && (d.length < 10 || d.length > 13)) return fail('Celular inválido. Use DDD + número, ex.: 11 98765-4321.');
         p.phone = d ? (d.length <= 11 ? '55' + d : d) : '';
@@ -604,7 +605,7 @@
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
     for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
-    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.pin; delete q.phone; delete q.fails; delete q.lockUntil; return q; });
+    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.pin; if (p.id !== meId) delete q.phone; delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => !b.private || priv);
     return Object.assign({}, s, { players, games, settings, bans, suggestions: [] });

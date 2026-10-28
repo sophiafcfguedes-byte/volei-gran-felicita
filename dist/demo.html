@@ -272,7 +272,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const SETTINGS_VERSION = 6;
   const ADMIN_ONLY = new Set([
-    'bulkAdd', 'setPhone', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
+    'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
     'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
@@ -669,6 +669,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       case 'setPhone': {
         const p = pm[a.id];
         if (!p || p.guest) return fail('Jogador não encontrado.');
+        if (!admin && a.id !== a.by) return fail('Cada um só cadastra o próprio celular.');
         const d = String(a.phone || '').replace(/\D/g, '');
         if (d && (d.length < 10 || d.length > 13)) return fail('Celular inválido. Use DDD + número, ex.: 11 98765-4321.');
         p.phone = d ? (d.length <= 11 ? '55' + d : d) : '';
@@ -866,7 +867,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
     for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
-    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.pin; delete q.phone; delete q.fails; delete q.lockUntil; return q; });
+    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.pin; if (p.id !== meId) delete q.phone; delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => !b.private || priv);
     return Object.assign({}, s, { players, games, settings, bans, suggestions: [] });
@@ -1206,6 +1207,10 @@ function renderMais() {
   if (p) html += `<div class="card"><h2>Sua foto</h2><div class="who">${avatar(p, true)}<div class="grow btns">
       <label class="btn btn-ghost btn-sm" for="photo-in">Escolher foto</label><input type="file" id="photo-in" accept="image/*" hidden>
       ${p.photo ? '<button class="btn btn-ghost btn-sm" data-act="photo-del">Tirar foto</button>' : ''}</div></div></div>`;
+  if (p) html += `<div class="card"><h2>Seu celular</h2>
+      <p class="hint">Pra o robô te marcar no grupo quando abrir uma vaga pra você. Só você e a comissão veem.</p>
+      <div class="field"><label for="my-phone">DDD + número</label><input type="tel" id="my-phone" value="${h(p.phone || '')}" placeholder="11 98765-4321" autocomplete="tel"></div>
+      <button class="btn btn-primary" data-act="save-phone">Salvar celular</button></div>`;
   html += `<div class="card"><h2>Sugestões pros admins</h2>
       <div class="field"><label for="sug-text">Sua mensagem</label><textarea id="sug-text" maxlength="1000" placeholder="Ideias, reclamações, elogios…"></textarea></div>
       <div class="btns"><button class="btn btn-ghost" data-act="sug-anon">Enviar anônima</button><button class="btn btn-primary" data-act="sug-sign"${p ? '' : ' disabled'}>Enviar com meu nome</button></div></div>
@@ -1402,6 +1407,7 @@ document.addEventListener('click', async e => {
       try { await navigator.clipboard.writeText(txt); toast('Lista copiada.'); } catch (e) { toast('Não consegui copiar. Tente pelo computador.', true); }
       return;
     }
+    case 'save-phone': return act({ type: 'setPhone', id: me, phone: val('my-phone') }, 'Celular salvo.');
     case 'whoami': if (me && t.closest('.who')) { logoutPlayer(); await refresh(); } return openWho();
     case 'register': {
       let r;

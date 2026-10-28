@@ -554,6 +554,10 @@ function renderMais() {
   if (p) html += `<div class="card"><h2>Sua foto</h2><div class="who">${avatar(p, true)}<div class="grow btns">
       <label class="btn btn-ghost btn-sm" for="photo-in">Escolher foto</label><input type="file" id="photo-in" accept="image/*" hidden>
       ${p.photo ? '<button class="btn btn-ghost btn-sm" data-act="photo-del">Tirar foto</button>' : ''}</div></div></div>`;
+  if (p) html += `<div class="card"><h2>Seu celular</h2>
+      <p class="hint">Pra o robô te marcar no grupo quando abrir uma vaga pra você. Só você e a comissão veem.</p>
+      <div class="field"><label for="my-phone">DDD + número</label><input type="tel" id="my-phone" value="${h(p.phone || '')}" placeholder="11 98765-4321" autocomplete="tel"></div>
+      <button class="btn btn-primary" data-act="save-phone">Salvar celular</button></div>`;
   html += `<div class="card"><h2>Sugestões pros admins</h2>
       <div class="field"><label for="sug-text">Sua mensagem</label><textarea id="sug-text" maxlength="1000" placeholder="Ideias, reclamações, elogios…"></textarea></div>
       <div class="btns"><button class="btn btn-ghost" data-act="sug-anon">Enviar anônima</button><button class="btn btn-primary" data-act="sug-sign"${p ? '' : ' disabled'}>Enviar com meu nome</button></div></div>
@@ -750,6 +754,7 @@ document.addEventListener('click', async e => {
       try { await navigator.clipboard.writeText(txt); toast('Lista copiada.'); } catch (e) { toast('Não consegui copiar. Tente pelo computador.', true); }
       return;
     }
+    case 'save-phone': return act({ type: 'setPhone', id: me, phone: val('my-phone') }, 'Celular salvo.');
     case 'whoami': if (me && t.closest('.who')) { logoutPlayer(); await refresh(); } return openWho();
     case 'register': {
       let r;
