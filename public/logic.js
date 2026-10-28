@@ -227,7 +227,7 @@
     const cap = Math.ceil(n / k);
     const P = shuffle(ids.map(id => {
       const p = pm[id], r = v.roles[id] || {};
-      return { id, g: p.gender === 'F' ? 'F' : 'M', sk: Number(p.skill) || 3, st: !!r.setter };
+      return { id, g: p.gender === 'F' ? 'F' : 'M', sk: Number(p.skill) || 3, st: !!r.setter, ag: Number(p.age) || 0 };
     }), rand);
     const bySkill = arr => arr.sort((a, b) => b.sk - a.sk);
     const order = [
@@ -235,8 +235,8 @@
       ...bySkill(P.filter(x => !x.st && x.g === 'F')),
       ...bySkill(P.filter(x => !x.st && x.g === 'M'))
     ];
-    const T = Array.from({ length: k }, () => ({ m: [], sum: 0, st: 0, f: 0 }));
-    const put = (t, x) => { t.m.push(x); t.sum += x.sk; if (x.st) t.st++; if (x.g === 'F') t.f++; };
+    const T = Array.from({ length: k }, () => ({ m: [], sum: 0, st: 0, f: 0, ages: [0, 0, 0, 0, 0] }));
+    const put = (t, x) => { t.m.push(x); t.ages[x.ag]++; t.sum += x.sk; if (x.st) t.st++; if (x.g === 'F') t.f++; };
     /* Segunda/quinta: cada time leva obrigatoriamente 1 iniciante (N1/N2) e 1 muito bom (N1/N2).
        Se não tiver pra todos, os que tem são espalhados e o resto é equilibrado normal. */
     if (!(v.meta && v.meta.private)) {
@@ -249,8 +249,9 @@
     for (const x of order) {
       if (x.lock) continue;
       const open = T.filter(t => t.m.length < cap);
-      const key = t => [x.st ? t.st : x.g === 'F' ? t.f : 0, t.sum, t.m.length];
-      open.sort((a, b) => { const ka = key(a), kb = key(b); for (let i = 0; i < 3; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i]; return rand() - 0.5; });
+      /* gênero primeiro, depois faixa etária espalhada, depois nível */
+      const key = t => [x.st ? t.st : x.g === 'F' ? t.f : 0, x.ag ? t.ages[x.ag] : 0, t.sum, t.m.length];
+      open.sort((a, b) => { const ka = key(a), kb = key(b); for (let i = 0; i < 4; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i]; return rand() - 0.5; });
       put(open[0], x);
     }
     const spread = () => { const vals = T.map(t => t.sum); return Math.max(...vals) - Math.min(...vals); };
@@ -259,7 +260,7 @@
       if (a === b || !a.m.length || !b.m.length) continue;
       const i = Math.floor(rand() * a.m.length), x = a.m[i];
       if (x.lock) continue;
-      const j = b.m.findIndex(y => !y.lock && y.g === x.g && y.st === x.st && y.sk !== x.sk);
+      const j = b.m.findIndex(y => !y.lock && y.g === x.g && y.ag === x.ag && y.st === x.st && y.sk !== x.sk);
       if (j < 0) continue;
       const y = b.m[j], before = spread();
       a.sum += y.sk - x.sk; b.sum += x.sk - y.sk;
@@ -406,6 +407,7 @@
         let p = a.id ? pm[a.id] : null;
         if (!p) { p = { id: newId(s, 'p'), photo: null, freq: 0, fixed: false, priv: false }; s.players.push(p); }
         Object.assign(p, { name, gender: a.gender, skill: clampSkill(a.skill), paid: !!a.paid, guest: !!a.guest });
+        if (a.age !== undefined) p.age = Math.max(0, Math.min(4, Math.round(Number(a.age) || 0)));
         if (a.fixed !== undefined) p.fixed = !!a.fixed && !p.guest;
         if (a.priv !== undefined) p.priv = !!a.priv && !p.guest;
         return ok;
@@ -621,7 +623,7 @@
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
     for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
-    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.pin; if (p.id !== meId) delete q.phone; delete q.fails; delete q.lockUntil; return q; });
+    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.age; delete q.pin; if (p.id !== meId) delete q.phone; delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => !b.private || priv);
     return Object.assign({}, s, { players, games, settings, bans, suggestions: [] });

@@ -397,6 +397,7 @@ const locked = () => LG.lockInfo(S, now()).locked && !isAdmin;
 const canEdit = () => (!!me || isAdmin) && !locked();
 const canEditFixed = p => isAdmin || me === p.id;
 const opts = (list, val) => list.map(([v, t]) => `<option value="${h(v)}"${String(v) === String(val) ? ' selected' : ''}>${h(t)}</option>`).join('');
+const AGES = [[0, 'Idade?'], [1, 'Júnior'], [2, 'Adulto'], [3, 'Master'], [4, 'Sênior']];
 const SKILLS = [[1, 'Iniciante N1'], [2, 'Iniciante N2'], [3, 'Médio N1'], [4, 'Médio N2'], [5, 'Bom N1'], [6, 'Bom N2'], [7, 'Muito bom N1'], [8, 'Muito bom N2']];
 const GENDERS = [['F', 'Mulher'], ['M', 'Homem']];
 const DAY_OPTS = LG.DAYS.map((d, i) => [i, d]);
@@ -572,7 +573,7 @@ function renderMais() {
       <li>Acabaram as vagas, entra na lista de espera, que sobe sozinha quando alguém desiste.</li>
       <li>Cada pessoa só marca e desmarca o próprio nome.${st.guestLimit ? ` Nos jogos que aceitam convidados, cada um pode trazer até ${st.guestLimit}, e só quem trouxe pode tirar.` : ''}</li>
       <li>Quando o jogo acaba, a lista zera sozinha e já mostra o próximo jogo. Quem estava confirmado ganha +1 na frequência${sched.some(g => g.private) ? ' (só segunda e quinta contam)' : ''}.</li>
-      <li>O sorteio monta ${st.teams || 4} times equilibrando homens, mulheres e nível. O nível de cada um só o admin vê.</li>
+      <li>O sorteio monta ${st.teams || 4} times equilibrando homens, mulheres, idade e nível. O nível e a faixa etária de cada um só o admin vê.</li>
     </ul></details></div>`;
 
   if (!isAdmin) {
@@ -622,6 +623,7 @@ function renderMais() {
       <div>${players.map(q => `<div class="adm-player">${avatar(q)}<b>${h(nameOf(q))}</b>
         <div class="ctrls"><select data-edit="${q.id}" data-field="gender" aria-label="Gênero de ${h(q.name)}">${opts(GENDERS, q.gender)}</select>
           <select data-edit="${q.id}" data-field="skill" aria-label="Nível de ${h(q.name)}">${opts(SKILLS, q.skill)}</select>
+          <select data-edit="${q.id}" data-field="age" aria-label="Faixa etária de ${h(q.name)}">${opts(AGES, q.age || 0)}</select>
           <button class="tog setter" aria-pressed="${!!q.paid}" data-paid="${q.id}">pago</button>
           ${q.guest ? '' : `<button class="tog setter" aria-pressed="${!!q.fixed}" data-fixed="${q.id}">comissão</button><button class="tog setter" aria-pressed="${!!q.priv}" data-priv="${q.id}" title="Vê e faz check-in nos jogos fechados">${ICON.ball}${h(privLabel())}</button>`}
           <button class="btn btn-danger btn-sm" data-del="${q.id}" data-confirm>Excluir</button></div>
