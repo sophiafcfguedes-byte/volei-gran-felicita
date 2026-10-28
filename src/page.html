@@ -621,7 +621,8 @@ function renderMais() {
           <button class="tog setter" aria-pressed="${!!q.paid}" data-paid="${q.id}">pago</button>
           ${q.guest ? '' : `<button class="tog setter" aria-pressed="${!!q.fixed}" data-fixed="${q.id}">comissão</button><button class="tog setter" aria-pressed="${!!q.priv}" data-priv="${q.id}" title="Vê e faz check-in nos jogos fechados">${ICON.ball}${h(privLabel())}</button>`}
           <button class="btn btn-danger btn-sm" data-del="${q.id}" data-confirm>Excluir</button></div>
-        ${q.guest ? '' : `<div class="pinrow"><span class="by">Senha:</span> <b class="pin">${q.pin ? h(q.pin) : '<span class="rem">sem senha</span>'}</b> <button class="link" data-newpin="${q.id}">${q.pin ? 'Trocar' : 'Gerar'}</button></div>`}</div>`).join('')}</div></div>
+        ${q.guest ? '' : `<div class="pinrow"><span class="by">Senha:</span> <b class="pin">${q.pin ? h(q.pin) : '<span class="rem">sem senha</span>'}</b> <button class="link" data-newpin="${q.id}">${q.pin ? 'Trocar' : 'Gerar'}</button></div>
+        <div class="pinrow"><label class="by" for="ph-${q.id}">Celular:</label> <input type="tel" id="ph-${q.id}" data-phone="${q.id}" value="${h(q.phone || '')}" placeholder="DDD + número (pra marcar no WhatsApp)" style="min-height:34px;padding:4px 8px;flex:1"></div>`}</div>`).join('')}</div></div>
 
     <div class="card"><h2>Admin · Senhas</h2>
       <p class="hint">Cada pessoa entra com a própria senha. Cole uma linha por pessoa com o <b>nome</b> e os <b>3 últimos dígitos do CPF</b> (ex.: <b>Ana Souza 482</b>). O app sorteia a letra. Os nomes precisam estar cadastrados igual na lista.</p>
@@ -790,6 +791,7 @@ document.addEventListener('change', e => {
     }
     return act({ type: t.checked ? 'join' : 'leave', pid });
   }
+  if (t.dataset.phone) return act({ type: 'setPhone', id: t.dataset.phone, phone: t.value }, 'Celular salvo.');
   if (t.dataset.edit) { const q = P(t.dataset.edit); if (!q) return; return act(Object.assign({ type: 'savePlayer' }, q, { [t.dataset.field]: t.value }), 'Salvo.'); }
   if (t.id === 'photo-in' && t.files && t.files[0]) return uploadPhoto(t.files[0]);
 });

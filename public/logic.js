@@ -10,7 +10,7 @@
   const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const SETTINGS_VERSION = 6;
   const ADMIN_ONLY = new Set([
-    'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
+    'bulkAdd', 'setPhone', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
     'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
@@ -76,7 +76,7 @@
     return `${DAYS_SHORT[g.day]}, ${p.d} de ${MONTHS[p.m]} · ${g.start}–${g.end}`;
   }
 
-  const emptyGame = meta => ({ meta, presences: [], out: [], roles: {}, teams: null, log: [] });
+  const emptyGame = meta => ({ meta, presences: [], out: [], roles: {}, teams: null, log: [], promos: [] });
 
   /* Uma "visão" de um jogo no formato que as regras usam. Os arrays são os do jogo. */
   function view(s, id) {
@@ -85,12 +85,12 @@
     return {
       settings: Object.assign({}, s.settings, { max: g.meta.max, teams: g.meta.teams }),
       players: s.players, current: g.meta,
-      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log, frozen: g.frozen || null
+      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log, frozen: g.frozen || null, promos: g.promos || []
     };
   }
   function writeBack(s, id, v) {
     const g = s.games[id];
-    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log; g.frozen = v.frozen || null;
+    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log; g.frozen = v.frozen || null; g.promos = v.promos || [];
   }
 
   /* Ajusta estados antigos, fecha jogos que já acabaram (+1 na frequência
@@ -279,7 +279,16 @@
       if (!v) return fail('Esse jogo não está mais aberto. Recarregue a página.');
       const meta = v.current;
       if (meta.private && !admin && !canSee(meta, me)) return fail('Esse jogo é só pra quem foi liberado.');
+      const before = derive(v).confirmed;
       const r = gameAction(s, v, a, { now, admin, me, limit, pm, rand: ctx.rand });
+      /* Quem saiu da espera e entrou na lista: o robô avisa no grupo. */
+      if (r.ok && a.type === 'leave') {
+        const up = derive(v).confirmed.filter(id => !before.includes(id) && id !== a.pid);
+        v.promos = (v.promos || []).concat(up.map(pid => {
+          const pr = v.presences.find(x => x.pid === pid) || {};
+          return { pid, ts: now, by: pr.by && pr.by !== pid ? pr.by : null };
+        })).slice(-60);
+      }
       writeBack(s, a.game, v);
       return r;
     }
@@ -393,6 +402,14 @@
           delete g.roles[a.id];
           if (g.teams) g.teams.list = g.teams.list.map(t => t.filter(id => id !== a.id));
         }
+        return ok;
+      }
+      case 'setPhone': {
+        const p = pm[a.id];
+        if (!p || p.guest) return fail('Jogador não encontrado.');
+        const d = String(a.phone || '').replace(/\D/g, '');
+        if (d && (d.length < 10 || d.length > 13)) return fail('Celular inválido. Use DDD + número, ex.: 11 98765-4321.');
+        p.phone = d ? (d.length <= 11 ? '55' + d : d) : '';
         return ok;
       }
       case 'togglePaid': { const p = pm[a.id]; if (p) p.paid = !p.paid; return ok; }
@@ -587,7 +604,7 @@
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
     for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
-    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.pin; delete q.fails; delete q.lockUntil; return q; });
+    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.pin; delete q.phone; delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => !b.private || priv);
     return Object.assign({}, s, { players, games, settings, bans, suggestions: [] });
@@ -622,7 +639,9 @@
         ...d.fixed.map(id => `⭐ ${nm(id)}`), ...d.regular.map((id, i) => `${i + 1}. ${nm(id)}`)];
       if (d.waitlist.length) lines.push('', '*Lista de espera*', ...d.waitlist.map((id, i) => `${i + 1}. ${nm(id)}`));
       lines.push('', `Quem desistir até as ${g.meta.cutoff} libera a vaga pra espera.`);
-      out.push({ id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
+      const who = id => pm[id] ? { pid: id, name: pm[id].name, phone: pm[id].phone || '', guest: !!pm[id].guest } : null;
+      const promos = (g.promos || []).map(x => ({ key: g.meta.id + ':' + x.pid + ':' + x.ts, ...who(x.pid), by: x.by ? who(x.by) : null })).filter(x => x.pid);
+      out.push({ promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
     }
     return { games: out };
   }

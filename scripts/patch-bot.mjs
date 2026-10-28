@@ -21,6 +21,19 @@ if (!POLLS_ENABLED) for (const r of ROUNDS) { const c = state.rounds[r.id].activ
    `setInterval(tick, 5_000);
 
 // ---------- avisos do app: lista completa ----------
+// Acha o WhatsApp da pessoa: celular cadastrado no app, senão o contato salvo com o mesmo nome.
+function jidFor(p) {
+  if (p.phone) return p.phone + '@s.whatsapp.net';
+  const want = simplify(p.name);
+  let found = null;
+  for (const [id, c] of Object.entries(contacts)) {
+    if (simplify(c.saved) !== want && simplify(c.push) !== want) continue;
+    const phone = [id, ...(c.alt || [])].find((j) => String(j).endsWith('@s.whatsapp.net'));
+    if (found && found !== (phone || id)) return null; // dois contatos com o mesmo nome: não arrisca
+    found = phone || id;
+  }
+  return found;
+}
 async function avisosTick() {
   if (!connected || !AVISOS.enabled) return;
   let data;
@@ -35,6 +48,23 @@ async function avisosTick() {
       await sock.sendMessage(groupId, { text: g.text + (AVISOS.publicUrl ? '\\n' + AVISOS.publicUrl : '') });
       log('Aviso enviado: lista completa (' + g.id + ').');
     } catch (e) { delete state.avisos[g.id]; saveState(); logErr('Não consegui mandar o aviso:', e.message); }
+  }
+  // Quem subiu da espera pra lista: marca a pessoa (ou quem trouxe o convidado) no grupo do jogo.
+  for (const g of data.games || []) {
+    const groupId = rt[g.group]?.groupId;
+    for (const pr of g.promos || []) {
+      if (state.avisos[pr.key]) continue;
+      state.avisos[pr.key] = Date.now(); saveState();
+      if (!groupId) continue;
+      const target = pr.guest && pr.by ? pr.by : pr;
+      const jid = jidFor(target);
+      const tag = jid ? '@' + jid.split('@')[0] : '@' + target.name;
+      const text = pr.guest && pr.by
+        ? tag + ' uma vaga foi aberta e ocupada pelo seu convidado ' + pr.name + ', confira no app'
+        : tag + ' uma vaga foi aberta e ocupada por você, confira no app';
+      try { await sock.sendMessage(groupId, { text, mentions: jid ? [jid] : [] }); log('Aviso: ' + target.name + ' subiu da espera (' + g.id + ').'); }
+      catch (e) { logErr('Não consegui mandar o aviso de vaga:', e.message); }
+    }
   }
   for (const k of Object.keys(state.avisos)) if (Date.now() - state.avisos[k] > 10 * 864e5) delete state.avisos[k];
 }

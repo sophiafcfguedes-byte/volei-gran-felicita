@@ -272,7 +272,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const SETTINGS_VERSION = 6;
   const ADMIN_ONLY = new Set([
-    'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
+    'bulkAdd', 'setPhone', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
     'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
@@ -338,7 +338,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     return `${DAYS_SHORT[g.day]}, ${p.d} de ${MONTHS[p.m]} · ${g.start}–${g.end}`;
   }
 
-  const emptyGame = meta => ({ meta, presences: [], out: [], roles: {}, teams: null, log: [] });
+  const emptyGame = meta => ({ meta, presences: [], out: [], roles: {}, teams: null, log: [], promos: [] });
 
   /* Uma "visão" de um jogo no formato que as regras usam. Os arrays são os do jogo. */
   function view(s, id) {
@@ -347,12 +347,12 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     return {
       settings: Object.assign({}, s.settings, { max: g.meta.max, teams: g.meta.teams }),
       players: s.players, current: g.meta,
-      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log, frozen: g.frozen || null
+      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log, frozen: g.frozen || null, promos: g.promos || []
     };
   }
   function writeBack(s, id, v) {
     const g = s.games[id];
-    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log; g.frozen = v.frozen || null;
+    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log; g.frozen = v.frozen || null; g.promos = v.promos || [];
   }
 
   /* Ajusta estados antigos, fecha jogos que já acabaram (+1 na frequência
@@ -541,7 +541,16 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       if (!v) return fail('Esse jogo não está mais aberto. Recarregue a página.');
       const meta = v.current;
       if (meta.private && !admin && !canSee(meta, me)) return fail('Esse jogo é só pra quem foi liberado.');
+      const before = derive(v).confirmed;
       const r = gameAction(s, v, a, { now, admin, me, limit, pm, rand: ctx.rand });
+      /* Quem saiu da espera e entrou na lista: o robô avisa no grupo. */
+      if (r.ok && a.type === 'leave') {
+        const up = derive(v).confirmed.filter(id => !before.includes(id) && id !== a.pid);
+        v.promos = (v.promos || []).concat(up.map(pid => {
+          const pr = v.presences.find(x => x.pid === pid) || {};
+          return { pid, ts: now, by: pr.by && pr.by !== pid ? pr.by : null };
+        })).slice(-60);
+      }
       writeBack(s, a.game, v);
       return r;
     }
@@ -655,6 +664,14 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
           delete g.roles[a.id];
           if (g.teams) g.teams.list = g.teams.list.map(t => t.filter(id => id !== a.id));
         }
+        return ok;
+      }
+      case 'setPhone': {
+        const p = pm[a.id];
+        if (!p || p.guest) return fail('Jogador não encontrado.');
+        const d = String(a.phone || '').replace(/\D/g, '');
+        if (d && (d.length < 10 || d.length > 13)) return fail('Celular inválido. Use DDD + número, ex.: 11 98765-4321.');
+        p.phone = d ? (d.length <= 11 ? '55' + d : d) : '';
         return ok;
       }
       case 'togglePaid': { const p = pm[a.id]; if (p) p.paid = !p.paid; return ok; }
@@ -849,7 +866,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
     for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
-    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.pin; delete q.fails; delete q.lockUntil; return q; });
+    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.pin; delete q.phone; delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => !b.private || priv);
     return Object.assign({}, s, { players, games, settings, bans, suggestions: [] });
@@ -884,7 +901,9 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         ...d.fixed.map(id => `⭐ ${nm(id)}`), ...d.regular.map((id, i) => `${i + 1}. ${nm(id)}`)];
       if (d.waitlist.length) lines.push('', '*Lista de espera*', ...d.waitlist.map((id, i) => `${i + 1}. ${nm(id)}`));
       lines.push('', `Quem desistir até as ${g.meta.cutoff} libera a vaga pra espera.`);
-      out.push({ id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
+      const who = id => pm[id] ? { pid: id, name: pm[id].name, phone: pm[id].phone || '', guest: !!pm[id].guest } : null;
+      const promos = (g.promos || []).map(x => ({ key: g.meta.id + ':' + x.pid + ':' + x.ts, ...who(x.pid), by: x.by ? who(x.by) : null })).filter(x => x.pid);
+      out.push({ promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
     }
     return { games: out };
   }
@@ -1254,7 +1273,8 @@ function renderMais() {
           <button class="tog setter" aria-pressed="${!!q.paid}" data-paid="${q.id}">pago</button>
           ${q.guest ? '' : `<button class="tog setter" aria-pressed="${!!q.fixed}" data-fixed="${q.id}">comissão</button><button class="tog setter" aria-pressed="${!!q.priv}" data-priv="${q.id}" title="Vê e faz check-in nos jogos fechados">${ICON.ball}${h(privLabel())}</button>`}
           <button class="btn btn-danger btn-sm" data-del="${q.id}" data-confirm>Excluir</button></div>
-        ${q.guest ? '' : `<div class="pinrow"><span class="by">Senha:</span> <b class="pin">${q.pin ? h(q.pin) : '<span class="rem">sem senha</span>'}</b> <button class="link" data-newpin="${q.id}">${q.pin ? 'Trocar' : 'Gerar'}</button></div>`}</div>`).join('')}</div></div>
+        ${q.guest ? '' : `<div class="pinrow"><span class="by">Senha:</span> <b class="pin">${q.pin ? h(q.pin) : '<span class="rem">sem senha</span>'}</b> <button class="link" data-newpin="${q.id}">${q.pin ? 'Trocar' : 'Gerar'}</button></div>
+        <div class="pinrow"><label class="by" for="ph-${q.id}">Celular:</label> <input type="tel" id="ph-${q.id}" data-phone="${q.id}" value="${h(q.phone || '')}" placeholder="DDD + número (pra marcar no WhatsApp)" style="min-height:34px;padding:4px 8px;flex:1"></div>`}</div>`).join('')}</div></div>
 
     <div class="card"><h2>Admin · Senhas</h2>
       <p class="hint">Cada pessoa entra com a própria senha. Cole uma linha por pessoa com o <b>nome</b> e os <b>3 últimos dígitos do CPF</b> (ex.: <b>Ana Souza 482</b>). O app sorteia a letra. Os nomes precisam estar cadastrados igual na lista.</p>
@@ -1423,6 +1443,7 @@ document.addEventListener('change', e => {
     }
     return act({ type: t.checked ? 'join' : 'leave', pid });
   }
+  if (t.dataset.phone) return act({ type: 'setPhone', id: t.dataset.phone, phone: t.value }, 'Celular salvo.');
   if (t.dataset.edit) { const q = P(t.dataset.edit); if (!q) return; return act(Object.assign({ type: 'savePlayer' }, q, { [t.dataset.field]: t.value }), 'Salvo.'); }
   if (t.id === 'photo-in' && t.files && t.files[0]) return uploadPhoto(t.files[0]);
 });
