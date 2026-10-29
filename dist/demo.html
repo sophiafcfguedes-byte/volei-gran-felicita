@@ -499,8 +499,10 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     rand = rand || Math.random;
     const pm = playerMap(v);
     const n = ids.length;
-    const k = Math.max(2, Math.min(Math.floor(n / 2), Number(v.settings.teams) || 4));
-    const cap = Math.ceil(n / k);
+    const k = !(v.meta && v.meta.private) ? (Number(v.settings.teams) || 4) : Math.max(2, Math.min(Math.floor(n / 2), Number(v.settings.teams) || 4));
+    /* Segunda/quinta: times de 6 obrigatórios (o último fica com o que sobrar). Quarta: divide igual. */
+    const six = !(v.meta && v.meta.private);
+    const capOf = i => six ? Math.min(6, Math.max(0, n - 6 * i)) : Math.ceil(n / k);
     const P = shuffle(ids.map(id => {
       const p = pm[id], r = v.roles[id] || {};
       return { id, g: p.gender === 'F' ? 'F' : 'M', sk: Number(p.skill) || 3, st: !!r.setter, ag: Number(p.age) || 0 };
@@ -511,28 +513,28 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       ...bySkill(P.filter(x => !x.st && x.g === 'F')),
       ...bySkill(P.filter(x => !x.st && x.g === 'M'))
     ];
-    const T = Array.from({ length: k }, () => ({ m: [], sum: 0, st: 0, f: 0, ages: [0, 0, 0, 0, 0] }));
+    const T = Array.from({ length: k }, (_, i) => ({ cap: capOf(i), m: [], sum: 0, st: 0, f: 0, ages: [0, 0, 0, 0, 0] })).filter(t => t.cap > 0);
     const put = (t, x) => { t.m.push(x); t.ages[x.ag]++; t.sum += x.sk; if (x.st) t.st++; if (x.g === 'F') t.f++; };
     /* Segunda/quinta: cada time leva obrigatoriamente 1 iniciante (N1/N2) e 1 muito bom (N1/N2).
        Se não tiver pra todos, os que tem são espalhados e o resto é equilibrado normal. */
     if (!(v.meta && v.meta.private)) {
       for (const want of [x => x.sk >= 7, x => x.sk <= 2]) {
         const pool = shuffle(order.filter(x => !x.lock && want(x)), rand);
-        const ts = shuffle(T.slice(), rand).sort((a, b) => a.sum - b.sum);
-        ts.forEach((t, i) => { const x = pool[i]; if (x) { x.lock = true; put(t, x); } });
+        const ts = shuffle(T.slice(), rand).sort((a, b) => (b.cap - a.cap) || (a.sum - b.sum));
+        let pi = 0; ts.forEach(t => { if (t.m.length >= t.cap) return; const x = pool[pi++]; if (x) { x.lock = true; put(t, x); } });
       }
     }
     for (const x of order) {
       if (x.lock) continue;
-      const open = T.filter(t => t.m.length < cap);
+      const open = T.filter(t => t.m.length < t.cap);
       /* gênero primeiro, depois faixa etária espalhada, depois nível */
-      const key = t => [x.st ? t.st : x.g === 'F' ? t.f : 0, x.ag ? t.ages[x.ag] : 0, t.sum, t.m.length];
+      const key = t => [x.st ? t.st : x.g === 'F' ? t.f : 0, x.ag ? t.ages[x.ag] : 0, t.sum / t.cap, t.m.length];
       open.sort((a, b) => { const ka = key(a), kb = key(b); for (let i = 0; i < 4; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i]; return rand() - 0.5; });
       put(open[0], x);
     }
-    const spread = () => { const vals = T.map(t => t.sum); return Math.max(...vals) - Math.min(...vals); };
+    const spread = () => { const vals = T.map(t => t.sum / t.cap); return Math.max(...vals) - Math.min(...vals); };
     for (let it = 0; it < 600; it++) {
-      const a = T[Math.floor(rand() * k)], b = T[Math.floor(rand() * k)];
+      const a = T[Math.floor(rand() * T.length)], b = T[Math.floor(rand() * T.length)];
       if (a === b || !a.m.length || !b.m.length) continue;
       const i = Math.floor(rand() * a.m.length), x = a.m[i];
       if (x.lock) continue;
@@ -1303,7 +1305,7 @@ function renderTimes() {
       <a class="btn btn-wa" href="${h(waLink(teamsText()))}" target="_blank" rel="noopener">${ICON.wa}Mandar times no WhatsApp</a>`;
   }
   return `<div class="card"><h2>Sorteio dos times</h2>
-      <p class="hint">${S.settings.teams || 4} times, equilibrados entre homens e mulheres e pelo nível de cada um. Entram os ${D.confirmed.length} confirmados${D.confirmed.length >= 4 ? ` (${nT} times de ${Math.floor(D.confirmed.length / nT)}${D.confirmed.length % nT ? ' ou ' + Math.ceil(D.confirmed.length / nT) : ''})` : ''}. Às ${S.current ? h(S.current.cutoff) : '17:00'} do dia do jogo, quando a lista fecha, os times são sorteados sozinhos.</p>
+      <p class="hint">${S.settings.teams || 4} times, equilibrados entre homens e mulheres e pelo nível de cada um. Entram os ${D.confirmed.length} confirmados${D.confirmed.length >= 4 ? (S.current && !S.current.private ? ' (times de 6; o último fica com quem sobrar)' : ` (${nT} times de ${Math.floor(D.confirmed.length / nT)}${D.confirmed.length % nT ? ' ou ' + Math.ceil(D.confirmed.length / nT) : ''})`) : ''}. Às ${S.current ? h(S.current.cutoff) : '17:00'} do dia do jogo, quando a lista fecha, os times são sorteados sozinhos.</p>
       ${isAdmin ? `<button class="btn btn-ball" data-act="draw"${conf.length >= 4 ? '' : ' disabled'} style="font-size:1.05rem">${ICON.shuffle}Sortear times</button>
       ${conf.length < 4 ? '<p class="hint">Precisa de pelo menos 4 confirmados.</p>' : ''}` : ''}
     </div>
