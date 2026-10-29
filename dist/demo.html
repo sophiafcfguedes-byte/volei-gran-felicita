@@ -726,8 +726,8 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         p.cpf = d; p.fullName = d ? full : '';
         return ok;
       }
-      case 'toggleMorador': { const p = pm[a.id]; if (p && !p.guest) p.morador = !p.morador; return ok; }
-      case 'toggleCadastrado': { const p = pm[a.id]; if (p && !p.guest) p.cadastrado = !p.cadastrado; return ok; }
+      case 'toggleMorador': { const p = pm[a.id]; if (p && !p.guest) { p.morador = !p.morador; if (p.morador) p.cadastrado = false; } return ok; }
+      case 'toggleCadastrado': { const p = pm[a.id]; if (p && !p.guest) { p.cadastrado = !p.cadastrado; if (p.cadastrado) p.morador = false; } return ok; }
       case 'acessoNow': { s.acessoReq = { game: a.game, ts: now }; return ok; }
       case 'togglePaid': { const p = pm[a.id]; if (p) p.paid = !p.paid; return ok; }
       case 'toggleFixed': {
