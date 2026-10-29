@@ -1273,7 +1273,7 @@ function renderLista() {
       <div class="field"><label for="g-name">Nome e sobrenome</label><input type="text" id="g-name" maxlength="40" autocomplete="off" placeholder="Nome e sobrenome"></div>
       <div class="grid2"><div class="field"><label for="g-gender">Gênero</label><select id="g-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
       <div class="field"><label for="g-skill">Nível</label><select id="g-skill">${opts(SKILLS, 3)}</select></div></div>
-      <div class="field"><label for="g-cpf">CPF do convidado (pra liberar na portaria${P(me) && P(me).morador ? ', opcional pra morador' : ', obrigatório'})</label><input type="text" id="g-cpf" inputmode="numeric" maxlength="14" autocomplete="off" placeholder="000.000.000-00"></div>
+      ${P(me) && P(me).morador ? '' : `<div class="field"><label for="g-cpf">CPF do convidado (obrigatório, pra liberar na portaria)</label><input type="text" id="g-cpf" inputmode="numeric" maxlength="14" autocomplete="off" placeholder="000.000.000-00"></div>`}
       <button class="btn btn-primary" data-act="addGuest">Adicionar convidado</button></div>` : ''}
     <div class="card"><div class="sec-h"><h2>Confirmados</h2><span class="muted">${D.confirmed.length}/${S.settings.max}</span></div>
       ${D.fixed.length ? `<ul class="conf fx">${D.fixed.map(id => `<li>${avatar(P(id))}<span class="nm">${h(nameOf(P(id)))}</span><span class="by">vaga garantida</span></li>`).join('')}</ul>` : ''}
