@@ -1026,7 +1026,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       const d = derive(view(s, g.meta.id));
       const p = spParts(g.meta.startAt);
       const dd = String(p.d).padStart(2, '0') + '/' + String(p.m + 1).padStart(2, '0');
-      const lines = [`🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} — ${dd}* (${g.meta.start} às ${g.meta.end})`,
+      const lines = [`🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐`, `${g.meta.start} às ${g.meta.end}`,
         `✅ Lista completa: ${d.confirmed.length}/${g.meta.max}`, '',
         ...d.fixed.map(id => `⭐ ${nm(id)}`), ...d.regular.map((id, i) => `${i + 1}. ${nm(id)}`)];
       if (d.waitlist.length) lines.push('', '*Lista de espera*', ...d.waitlist.map((id, i) => `${i + 1}. ${nm(id)}`));
@@ -1035,7 +1035,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       const promos = (g.promos || []).map(x => ({ key: g.meta.id + ':' + x.pid + ':' + x.ts, ...who(x.pid), by: x.by ? who(x.by) : null })).filter(x => x.pid);
       let teams = null;
       if (g.teams && g.teams.auto && g.teams.list.length) {
-        const tl = [`🏐 *TIMES — VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} — ${dd}*`];
+        const tl = [`🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐`, '*Times sorteados*'];
         g.teams.list.forEach((t, i) => { tl.push('', `*${teamName(g.meta, i)}*`, ...t.filter(id => pm[id]).map(id => '• ' + nm(id))); });
         teams = { key: g.meta.id + ':times:' + g.teams.ts, text: tl.join('\n') };
       }
@@ -1043,7 +1043,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       let vagas = null;
       const t13 = spTs(p.y, p.m, p.d, '13:00'), left = g.meta.max - d.confirmed.length;
       if (!g.meta.private && left > 0 && !g.frozen && now >= t13 && now < g.meta.cutoffAt) {
-        vagas = { key: g.meta.id + ':vagas13d', text: `Faltam ${left} ${left === 1 ? 'vaga' : 'vagas'} a ${left === 1 ? 'ser preenchida' : 'serem preenchidas'} pro vôlei de hoje (${g.meta.start}).` };
+        vagas = { key: g.meta.id + ':vagas13d', text: `🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐\nFaltam ${left} ${left === 1 ? 'vaga' : 'vagas'} a ${left === 1 ? 'ser preenchida' : 'serem preenchidas'} pro vôlei de hoje (${g.meta.start}).` };
       }
       out.push({ vagas, teams, promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
     }
