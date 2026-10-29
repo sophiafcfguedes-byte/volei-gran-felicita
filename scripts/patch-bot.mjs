@@ -36,8 +36,9 @@ async function avisosTick() {
   if (!connected || !AVISOS.enabled) return;
   let data;
   try { data = await (await fetch(AVISOS.appUrl + '/api/avisos')).json(); } catch (e) { return; }
-  state.avisos ||= {};
-  state.avisoMsgs ||= {};
+  const plain = (o) => o && typeof o === 'object' && !ArrayBuffer.isView(o) && !Array.isArray(o);
+  if (!plain(state.avisos)) state.avisos = {};
+  if (!plain(state.avisoMsgs)) state.avisoMsgs = {};
   for (const g of data.games || []) {
     const groupId = rt[g.group]?.groupId;
     if (!groupId) continue;
@@ -77,6 +78,14 @@ async function avisosTick() {
 setInterval(() => avisosTick().catch((e) => logErr('avisos:', e.message)), 30_000);
 // ---------- avisos do app (fim) ----------`;
 
+// Enquetes removidas de vez: startRound não faz nada e o log não anuncia envio automático.
+function killPolls() {
+  const head = "async function startRound(round, { test = false, reason = 'agendado' } = {}) {";
+  const guard = "\n  if (!POLLS_ENABLED) { log('Enquetes desligadas: a lista é pelo app.'); return; }";
+  if (s.includes(head) && !s.includes(head + guard)) s = s.replace(head, () => head + guard);
+  s = s.replace(/Envio automático: \$\{Object\.keys\(r\.sendDays\)[^`]*?\(somente nesse minuto\)\./, 'Enquetes desligadas (lista pelo app).');
+}
+
 // Já ajustado antes: troca o bloco antigo pelo novo.
 if (s.includes('const AVISOS = {')) {
   const start = s.indexOf('// ---------- avisos do app');
@@ -86,6 +95,7 @@ if (s.includes('const AVISOS = {')) {
   else { const i = s.indexOf('setInterval(() => avisosTick()'); end = i < 0 ? -1 : s.indexOf('\n', i); }
   if (start < 0 || end < 0) { console.error('Não reconheci o bloco de avisos do robô.'); process.exit(1); }
   s = s.slice(0, start) + BLOCK + s.slice(end);
+  killPolls();
   fs.writeFileSync(file, s);
   console.log('Robô atualizado: avisos na versão nova.');
   process.exit(0);
@@ -110,5 +120,6 @@ for (const [a, b] of edits) {
   if (s.split(a).length !== 2) { console.error('Não reconheci este trecho do robô (versão diferente?): ' + a.slice(0, 60)); process.exit(1); }
   s = s.replace(a, () => b);
 }
+killPolls();
 fs.writeFileSync(file, s);
 console.log('Robô ajustado: enquetes desligadas, avisos de lista ligados.');
