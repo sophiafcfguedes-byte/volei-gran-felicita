@@ -96,6 +96,7 @@
   /* Ajusta estados antigos, fecha jogos que já acabaram (+1 na frequência
      de quem estava confirmado) e abre a lista dos próximos. */
   function normalize(s, now) {
+    if (s.settings) s.settings.paidPriority = false; // vaquinha desligada
     const init = initialState();
     for (const k of Object.keys(init)) if (s[k] === undefined) s[k] = init[k];
     const st = s.settings || {};
