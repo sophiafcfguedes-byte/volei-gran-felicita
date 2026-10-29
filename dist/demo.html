@@ -873,6 +873,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         }
         if (!p && name.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
         const gcpf = String(a.cpf || '').replace(/\D/g, '');
+        if (!gcpf && !(p && p.guest && p.cpf)) return fail('Coloque o CPF do convidado (é pra liberar a entrada na portaria).');
         if (gcpf && !cpfOk(gcpf)) return fail('CPF do convidado inválido. Confira os números.');
         if (!p) {
           p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0, cpf: gcpf, fullName: gcpf ? name : '' };
@@ -1273,7 +1274,7 @@ function renderLista() {
       <div class="field"><label for="g-name">Nome e sobrenome</label><input type="text" id="g-name" maxlength="40" autocomplete="off" placeholder="Nome e sobrenome"></div>
       <div class="grid2"><div class="field"><label for="g-gender">Gênero</label><select id="g-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
       <div class="field"><label for="g-skill">Nível</label><select id="g-skill">${opts(SKILLS, 3)}</select></div></div>
-      <div class="field"><label for="g-cpf">CPF do convidado (pra liberar a entrada no condomínio)</label><input type="text" id="g-cpf" inputmode="numeric" maxlength="14" autocomplete="off" placeholder="000.000.000-00"></div>
+      <div class="field"><label for="g-cpf">CPF do convidado (obrigatório, pra liberar na portaria)</label><input type="text" id="g-cpf" inputmode="numeric" maxlength="14" autocomplete="off" placeholder="000.000.000-00"></div>
       <button class="btn btn-primary" data-act="addGuest">Adicionar convidado</button></div>` : ''}
     <div class="card"><div class="sec-h"><h2>Confirmados</h2><span class="muted">${D.confirmed.length}/${S.settings.max}</span></div>
       ${D.fixed.length ? `<ul class="conf fx">${D.fixed.map(id => `<li>${avatar(P(id))}<span class="nm">${h(nameOf(P(id)))}</span><span class="by">vaga garantida</span></li>`).join('')}</ul>` : ''}

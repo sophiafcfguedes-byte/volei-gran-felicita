@@ -597,6 +597,7 @@
         }
         if (!p && name.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
         const gcpf = String(a.cpf || '').replace(/\D/g, '');
+        if (!gcpf && !(p && p.guest && p.cpf)) return fail('Coloque o CPF do convidado (é pra liberar a entrada na portaria).');
         if (gcpf && !cpfOk(gcpf)) return fail('CPF do convidado inválido. Confira os números.');
         if (!p) {
           p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0, cpf: gcpf, fullName: gcpf ? name : '' };
