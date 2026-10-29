@@ -685,7 +685,9 @@
     const pm = playerMap(s), out = {};
     for (const [id, g] of Object.entries(games)) {
       const ran = (s.acessos || {})[id], m = {};
-      for (const pr of g.presences || []) {
+      const ids = new Set([...(g.presences || []).map(x => x.pid), ...derive(view(s, id)).confirmed]);
+      for (const pid of ids) {
+        const pr = (g.presences || []).find(x => x.pid === pid) || { pid };
         const p = pm[pr.pid]; if (!p) continue;
         const it = ran && ran.items.find(x => x.pid === pr.pid);
         m[pr.pid] = it ? it.st : p.morador ? 'morador' : p.cadastrado ? 'cadastrado' : p.cpf ? 'pronto' : (p.guest && pm[pr.by] && pm[pr.by].morador) ? 'convmorador' : 'semcpf';
