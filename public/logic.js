@@ -680,8 +680,23 @@
     return { ts: r.ts || null, ok: r.ok !== false, days };
   }
 
+  /* Situação na portaria de cada jogo (sem CPF nem erro detalhado) — todos veem. */
+  function portaria(s, games) {
+    const pm = playerMap(s), out = {};
+    for (const [id, g] of Object.entries(games)) {
+      const ran = (s.acessos || {})[id], m = {};
+      for (const pr of g.presences || []) {
+        const p = pm[pr.pid]; if (!p) continue;
+        const it = ran && ran.items.find(x => x.pid === pr.pid);
+        m[pr.pid] = it ? it.st : p.morador ? 'morador' : p.cadastrado ? 'cadastrado' : p.cpf ? 'pronto' : (p.guest && pm[pr.by] && pm[pr.by].morador) ? 'convmorador' : 'semcpf';
+      }
+      out[id] = { ts: ran ? ran.ts : null, st: m };
+    }
+    return out;
+  }
+
   function publicState(s, isAdmin, meId) {
-    if (isAdmin) return Object.assign({}, s, { agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
+    if (isAdmin) return Object.assign({}, s, { portaria: portaria(s, s.games), agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
     const me = s.players.find(p => p.id === meId);
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
@@ -690,7 +705,7 @@
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => !b.private || priv);
     delete settings.moradores;
-    return Object.assign({}, s, { players, games, settings, bans, suggestions: [], reservas: undefined, acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
+    return Object.assign({}, s, { players, games, settings, bans, suggestions: [], reservas: undefined, portaria: portaria(s, games), acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
   }
 
   /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */

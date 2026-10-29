@@ -266,7 +266,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   <button data-tab="lista"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/></svg>Lista</button>
   <button data-tab="times"><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>Times</button>
   <button data-tab="reservas"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Reservas</button>
-  <button data-tab="portaria" hidden><svg viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 4.5 3.4 8.4 8 9 4.6-.6 8-4.5 8-9V7l-8-4Z"/><path d="m9 12 2 2 4-4"/></svg>Portaria</button>
+  <button data-tab="portaria"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 4.5 3.4 8.4 8 9 4.6-.6 8-4.5 8-9V7l-8-4Z"/><path d="m9 12 2 2 4-4"/></svg>Portaria</button>
   <button data-tab="mais"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>Perfil</button>
 </div></nav>
 <div class="sheet" id="sheet" hidden></div>
@@ -955,8 +955,23 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     return { ts: r.ts || null, ok: r.ok !== false, days };
   }
 
+  /* Situação na portaria de cada jogo (sem CPF nem erro detalhado) — todos veem. */
+  function portaria(s, games) {
+    const pm = playerMap(s), out = {};
+    for (const [id, g] of Object.entries(games)) {
+      const ran = (s.acessos || {})[id], m = {};
+      for (const pr of g.presences || []) {
+        const p = pm[pr.pid]; if (!p) continue;
+        const it = ran && ran.items.find(x => x.pid === pr.pid);
+        m[pr.pid] = it ? it.st : p.morador ? 'morador' : p.cadastrado ? 'cadastrado' : p.cpf ? 'pronto' : (p.guest && pm[pr.by] && pm[pr.by].morador) ? 'convmorador' : 'semcpf';
+      }
+      out[id] = { ts: ran ? ran.ts : null, st: m };
+    }
+    return out;
+  }
+
   function publicState(s, isAdmin, meId) {
-    if (isAdmin) return Object.assign({}, s, { agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
+    if (isAdmin) return Object.assign({}, s, { portaria: portaria(s, s.games), agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
     const me = s.players.find(p => p.id === meId);
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
@@ -965,7 +980,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => !b.private || priv);
     delete settings.moradores;
-    return Object.assign({}, s, { players, games, settings, bans, suggestions: [], reservas: undefined, acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
+    return Object.assign({}, s, { players, games, settings, bans, suggestions: [], reservas: undefined, portaria: portaria(s, games), acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
   }
 
   /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */
@@ -1198,8 +1213,8 @@ function render() {
   document.querySelectorAll('#main input[id], #main select[id], #main textarea[id]').forEach(el => { if (el.type !== 'checkbox' && el.type !== 'file') keep[el.id] = el.value; });
   const focusId = document.activeElement && document.activeElement.id;
   $('#hdr').innerHTML = renderHeader();
-  $('#main').innerHTML = ({ lista: renderLista, times: renderTimes, reservas: renderReservas, portaria: isAdmin ? renderPortaria : renderLista, mais: renderMais }[tab] || renderLista)();
-  const pb = document.querySelector('#tabs [data-tab=portaria]'); if (pb) pb.hidden = !isAdmin;
+  $('#main').innerHTML = ({ lista: renderLista, times: renderTimes, reservas: renderReservas, portaria: renderPortaria, mais: renderMais }[tab] || renderLista)();
+  const pb = document.querySelector('#tabs [data-tab=portaria]'); if (pb) pb.hidden = false;
   for (const id in keep) { const el = document.getElementById(id); if (el) el.value = keep[id]; }
   if (focusId) { const el = document.getElementById(focusId); if (el && el.focus) el.focus({ preventScroll: true }); }
   document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
@@ -1329,17 +1344,19 @@ function renderReservas() {
 }
 
 function renderPortaria() {
-  const g = S.current, A = (RAW.acessos || {})[g ? g.id : ''] || null;
-  const ST = { criada: ['Liberado agora', 'ac-ok'], ja: ['Já tinha acesso', 'ac-ok'], morador: ['Morador', 'ac-mor'], cadastrado: ['Cadastrado', 'ac-cad'], convmorador: ['Convidado de morador', 'ac-mor'], semcpf: ['Sem CPF', 'ac-err'], erro: ['Erro', 'ac-err'] };
+  const g = S.current, A = (RAW.acessos || {})[g ? g.id : ''] || null, PT = (RAW.portaria || {})[g ? g.id : ''] || { st: {} };
+  const ST = { criada: ['Liberado', 'ac-ok'], ja: ['Liberado', 'ac-ok'], pronto: ['Libera às 17h', 'ac-ok'], morador: ['Morador', 'ac-mor'], cadastrado: ['Cadastrado', 'ac-cad'], convmorador: ['Convidado de morador', 'ac-mor'], semcpf: ['Sem CPF', 'ac-err'], erro: ['Erro', 'ac-err'] };
   const hm = ts => { const d = new Date(ts - 3 * 3600e3); return `${d.getUTCDate()}/${d.getUTCMonth() + 1} às ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; };
   const D = LG.derive(S);
-  const status = pid => { const it = A && A.items.find(x => x.pid === pid); if (it) return it; const p = P(pid); return { st: p && p.morador ? 'morador' : p && p.cadastrado ? 'cadastrado' : p && p.cpf ? 'pronto' : 'semcpf' }; };
-  const badge = it => it.st === 'pronto' ? '<span class="ac-st ac-ok">CPF ok · libera às 17h</span>' : `<span class="ac-st ${ST[it.st][1]}" ${it.msg ? `title="${h(it.msg)}"` : ''}>${ST[it.st][0]}</span>`;
+  const badge = st => { const b = ST[st] || ST.semcpf; return `<span class="ac-st ${b[1]}">${b[0]}</span>`; };
+  const errMsg = pid => { const it = isAdmin && A && A.items.find(x => x.pid === pid); return it && it.msg ? `<p class="hint" style="color:#940B29">${h(it.msg)}</p>` : ''; };
+  let html = `<div class="card"><h2>Portaria · ${h(gameTitle())}</h2>
+      <p class="hint">Às 17h do dia do jogo, quem está confirmado e não é morador é liberado na portaria do condomínio só para aquele dia. ${PT.ts ? 'Última liberação: ' + hm(PT.ts) + '.' : ''}${isAdmin ? '' : ' Sem CPF? Preencha em Perfil → Entrada no condomínio.'}</p>
+      ${D.confirmed.map(pid => `<div class="res-row"><span class="nm">${h(nameOf(P(pid)))}</span>${badge(PT.st[pid])}</div>${errMsg(pid)}`).join('') || '<p class="hint">Ninguém confirmado ainda.</p>'}
+      ${isAdmin ? '<button class="btn btn-ghost" data-act="acesso-now" style="margin-top:12px">Liberar agora (lista atual)</button>' : ''}</div>`;
+  if (!isAdmin) return html;
   const regs = S.players.filter(p => !p.guest).slice().sort(byName);
-  return `<div class="card"><h2>Portaria · ${h(gameTitle())}</h2>
-      <p class="hint">Às 17h do dia do jogo, quem está confirmado, não é morador e tem CPF é liberado no Vida de Síndico só para aquele dia (visitante). ${A ? 'Última liberação: ' + hm(A.ts) + '.' : 'Ainda não rodou para este jogo.'}</p>
-      ${D.confirmed.map(pid => { const it = status(pid); return `<div class="res-row"><span class="nm">${h(nameOf(P(pid)))}</span>${badge(it)}</div>${it.msg ? `<p class="hint" style="color:#940B29">${h(it.msg)}</p>` : ''}`; }).join('') || '<p class="hint">Ninguém confirmado ainda.</p>'}
-      <button class="btn btn-ghost" data-act="acesso-now" style="margin-top:12px">Liberar agora (lista atual)</button></div>
+  return html + `
     <div class="card"><h2>Cadastro pra portaria</h2>
       <p class="hint">Marque quem é <b>morador</b> ou quem já está <b>cadastrado</b> na portaria (esses não precisam de liberação). Os outros preenchem nome completo e CPF em Perfil → Entrada no condomínio, ou você preenche aqui.</p>
       ${regs.map(q => `<details class="res-row" style="display:block"><summary style="display:flex;gap:10px;align-items:center;cursor:pointer"><span class="nm" style="flex:1">${h(q.name)}</span>${q.morador ? '<span class="ac-st ac-mor">Morador</span>' : q.cadastrado ? '<span class="ac-st ac-cad">Cadastrado</span>' : q.cpf ? '<span class="ac-st ac-ok">CPF ok</span>' : '<span class="ac-st ac-err">Sem CPF</span>'}</summary>
