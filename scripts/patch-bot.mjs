@@ -73,10 +73,9 @@ async function avisosTick() {
     try {
       let mentions = [];
       try { mentions = (await sock.groupMetadata(groupId)).participants.map((p) => p.id); } catch (e) { logErr('Não consegui ler os membros do grupo:', e.message); }
-      // O WhatsApp só notifica a menção "escondida" de todos se o texto tiver ao menos um @número de verdade: usa o do próprio robô.
-      const me = String(sock.user?.id || '').split(':')[0].split('@')[0];
-      let text = g.vagas.text;
-      if (me) { text += '\\n— @' + me; mentions.push(me + '@s.whatsapp.net'); }
+      // Marca todo mundo do grupo no começo: @fulano @ciclano ... e depois o aviso.
+      const tags = mentions.map((j) => '@' + String(j).split('@')[0].split(':')[0]).join(' ');
+      let text = (tags ? tags + '\\n\\n' : '') + g.vagas.text;
       log('Aviso de vagas: marcando ' + mentions.length + ' pessoa(s).');
       if (AVISOS.publicUrl) text += '\\n' + AVISOS.publicUrl;
       await sock.sendMessage(groupId, { text, mentions });
