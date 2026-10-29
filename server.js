@@ -6,6 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const L = require('./public/logic.js');
 const Auth = require('./lib/auth.js');
+const VDS = require('./lib/vds.js');
 
 const PORT = Number(process.env.PORT) || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -34,6 +35,22 @@ setInterval(() => {
     if (JSON.stringify(state) !== lastSaved) { version = Date.now(); save(); }
   } catch (e) { console.error('normalize', e); }
 }, 20000);
+
+/* A cada 30 min: busca as reservas da quadra no Vida de Síndico (se o login estiver configurado). */
+async function syncReservas() {
+  const cfg = VDS.readConfig();
+  if (!cfg || !cfg.user || !cfg.pass) return;
+  try {
+    const list = await VDS.fetchReservas(cfg);
+    state.reservas = { ts: Date.now(), ok: true, list };
+  } catch (e) {
+    state.reservas = Object.assign({}, state.reservas || { list: [] }, { ok: false, err: String(e.message || e).slice(0, 200), errTs: Date.now() });
+    console.error('reservas:', e.message);
+  }
+  version = Date.now(); save();
+}
+setTimeout(syncReservas, 5000);
+setInterval(syncReservas, 30 * 60000);
 
 const SECRET = 'gf-auth:' + ADMIN_PASSWORD;
 const adminToken = ADMIN_PASSWORD ? crypto.createHash('sha256').update('volei:' + ADMIN_PASSWORD).digest('hex') : null;

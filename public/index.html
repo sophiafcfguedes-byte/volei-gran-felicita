@@ -231,7 +231,13 @@ details summary { cursor: pointer; font-weight: 700; }
 /* Navegação inferior */
 .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-top: 1px solid var(--line);
   padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
-.tabs-in { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; }
+.tabs-in { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; }
+.res-day { margin: 14px 0 6px; font-weight: 800; font-size: 14px; color: var(--muted, #6F6F6F); text-transform: capitalize; }
+.res-day:first-of-type { margin-top: 4px; }
+.res-row { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid rgba(127,127,127,.18); }
+.res-row .hr { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 104px; }
+.res-row.blk { opacity: .7; }
+.res-row .tag { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: rgba(148,11,41,.12); color: #940B29; }
 .tabs button { background: none; border: 0; display: grid; justify-items: center; gap: 2px; padding: 6px 2px; border-radius: 12px; color: var(--muted); font-size: .72rem; font-weight: 600; cursor: pointer; min-height: 52px; }
 .tabs svg { width: 22px; height: 22px; }
 .tabs button[aria-current=page] { color: var(--court); background: var(--court-soft); }
@@ -256,6 +262,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
 <nav class="tabs" aria-label="Seções"><div class="tabs-in" id="tabs">
   <button data-tab="lista"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/></svg>Lista</button>
   <button data-tab="times"><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>Times</button>
+  <button data-tab="reservas"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Reservas</button>
   <button data-tab="freq"><svg viewBox="0 0 24 24"><path d="M5 20V11M11 20V5M17 20v-6M3 20h18"/></svg>Frequência</button>
   <button data-tab="mais"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>Mais</button>
 </div></nav>
@@ -424,7 +431,7 @@ function render() {
   document.querySelectorAll('#main input[id], #main select[id], #main textarea[id]').forEach(el => { if (el.type !== 'checkbox' && el.type !== 'file') keep[el.id] = el.value; });
   const focusId = document.activeElement && document.activeElement.id;
   $('#hdr').innerHTML = renderHeader();
-  $('#main').innerHTML = ({ lista: renderLista, times: renderTimes, freq: renderFreq, mais: renderMais }[tab] || renderLista)();
+  $('#main').innerHTML = ({ lista: renderLista, times: renderTimes, freq: renderFreq, reservas: renderReservas, mais: renderMais }[tab] || renderLista)();
   for (const id in keep) { const el = document.getElementById(id); if (el) el.value = keep[id]; }
   if (focusId) { const el = document.getElementById(focusId); if (el && el.focus) el.focus({ preventScroll: true }); }
   document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
@@ -540,6 +547,25 @@ function teamsText() {
   return [`🏐 *Times — ${gameTitle()}*`, ...S.teams.list.map((t, i) => `\n*Time ${i + 1}*\n` + t.map(P).filter(Boolean).map(p => '• ' + nameOf(p)).join('\n'))].join('\n');
 }
 
+function renderReservas() {
+  const A = RAW.agenda;
+  if (!A) return `<div class="card"><h2>Reservas da quadra</h2><p class="hint">As reservas ainda não foram ligadas. Assim que a comissão configurar, elas aparecem aqui.</p></div>`;
+  const hm = ts => { const d = new Date(ts - 3 * 3600e3); return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); };
+  const endHm = ts => hm(ts + 1000);
+  const days = [];
+  for (const e of A.items) {
+    const q = spDate(e.start), key = `${LG.DAYS[q.wd]}, ${q.d}/${q.m + 1}`;
+    let d = days[days.length - 1];
+    if (!d || d.key !== key) days.push(d = { key, list: [] });
+    d.list.push(e);
+  }
+  const upd = A.ts ? (() => { const q = spDate(A.ts); return `Atualizado ${q.d}/${q.m + 1} às ${hm(A.ts)}`; })() : '';
+  return `<div class="card"><h2>Reservas da quadra</h2>
+    <p class="hint">Direto do Vida de Síndico. ${h(upd)}${A.ok ? '' : ' · não consegui atualizar agora'}</p>
+    ${days.length ? days.map(d => `<div class="res-day">${h(d.key)}</div>${d.list.map(e => `<div class="res-row${e.blocked ? ' blk' : ''}"><span class="hr">${hm(e.start)} – ${endHm(e.end)}</span><span class="nm">${h(e.who)}</span>${e.pending ? '<span class="tag">pendente</span>' : ''}</div>`).join('')}`).join('') : '<p class="hint">Nenhuma reserva nos próximos dias.</p>'}
+  </div>`;
+}
+
 function renderFreq() {
   const list = S.players.filter(p => !p.guest || p.freq > 0).slice().sort((a, b) => (b.freq || 0) - (a.freq || 0) || byName(a, b));
   const max = Math.max(1, ...list.map(p => p.freq || 0));
@@ -639,6 +665,12 @@ function renderMais() {
       <div class="btns"><button class="btn btn-primary" data-act="bulk-pins">Criar senhas</button><button class="btn btn-ghost" data-act="gen-pins">Senha aleatória pra quem não tem</button></div>
       <p class="hint">${S.players.filter(q => !q.guest && !q.pin).length} pessoa(s) sem senha.</p>
       <button class="btn btn-ghost" data-act="copy-pins">Copiar lista de senhas</button></div>
+
+    <div class="card"><h2>Admin · Moradores (aba Reservas)</h2>
+      <p class="hint">Um por linha: <b>Nome Torre Apartamento</b>, por exemplo <b>Sophia B3 1304</b>. A aba Reservas troca o apartamento pelo nome. Ninguém além dos admins vê esta lista.</p>
+      ${RAW.reservasErr ? `<p class="hint" style="color:#940B29">Última tentativa de buscar as reservas falhou: ${h(RAW.reservasErr)}</p>` : ''}
+      <div class="field"><label for="moradores">Moradores</label><textarea id="moradores" rows="8" placeholder="Sophia B3 1304">${h(RAW.settings.moradores || '')}</textarea></div>
+      <button class="btn btn-primary" data-act="save-moradores">Salvar moradores</button></div>
 
     <div class="card"><h2>Admin · Suspensões</h2>
       <p class="hint">Quem tirou o nome no dia do jogo depois do horário-limite fica fora do próximo. Toque em <b>Liberar</b> se foi engano.</p>
@@ -768,6 +800,7 @@ document.addEventListener('click', async e => {
       if (!r.ok) { toast(r.error || 'Não deu certo.', true); return; }
       me = r.id; store.set('me', me); closeSheet(); await refresh(); toast('Cadastrado! Oi, ' + P(me).name + '!'); return;
     }
+    case 'save-moradores': return act({ type: 'settings', moradores: val('moradores') }, 'Moradores salvos.');
     case 'bulk-add': return act({ type: 'bulkAdd', text: val('bulk-text'), gender: val('bulk-gender'), priv: document.getElementById('bulk-priv').checked }, null, ['bulk-text']).then(ok => { if (ok && lastResult && lastResult.added != null) toast(`${lastResult.added} cadastrado${lastResult.added === 1 ? '' : 's'}${lastResult.skipped ? `, ${lastResult.skipped} já existia${lastResult.skipped === 1 ? '' : 'm'}` : ''}.`); });
     case 'close-sheet': confirmFn = null; return closeSheet();
     case 'confirm-yes': { const f = confirmFn; confirmFn = null; closeSheet(); if (f) await f(); return; }

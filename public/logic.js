@@ -454,6 +454,7 @@
         if (a.groupName !== undefined) st.groupName = cleanName(a.groupName) || 'Vôlei Gran Felicitá';
         if (a.guestLimit !== undefined) st.guestLimit = Math.min(10, Math.max(0, Math.round(Number(a.guestLimit) || 0)));
         if (a.paidPriority !== undefined) st.paidPriority = !!a.paidPriority;
+        if (a.moradores !== undefined) st.moradores = String(a.moradores).slice(0, 8000);
         return ok;
       }
       case 'schedule': {
@@ -617,8 +618,33 @@
 
   /* O que cada pessoa recebe: sem nível (só admin), sem sugestões (só admin) e sem
      os jogos fechados para quem não tem a bolinha. */
+  /* Reservas da quadra (Vida de Síndico) com o apartamento trocado pelo nome. */
+  function parseMoradores(text) {
+    const map = {};
+    for (const line of String(text || '').split(/\n/)) {
+      const m = line.replace(/^\s*\d+\s*[-–.)]\s*/, '').match(/^(.+?)\s+(?:b|t|torre|bloco)\s*0*(\d+)\s*[-/ ]\s*(\d+)\s*$/i);
+      if (m) map[m[2] + '-' + m[3]] = m[1].trim();
+    }
+    return map;
+  }
+  function agenda(s, now) {
+    now = now || Date.now();
+    const r = s.reservas;
+    if (!r) return null;
+    const map = parseMoradores(s.settings.moradores);
+    const today = spParts(now), t0 = spTs(today.y, today.m, today.d, '00:00');
+    const toTs = iso => Date.parse(iso + '-03:00');
+    const items = (r.list || []).map(e => {
+      const u = e.title.match(/torre\s*0*(\d+)\s*-\s*(\w+)/i);
+      const key = u ? u[1] + '-' + u[2] : null;
+      const blocked = /interdit/i.test(e.title);
+      return { start: toTs(e.start), end: toTs(e.end), who: blocked ? 'Interditado' : key && map[key] ? map[key] : u ? `Torre ${u[1].padStart(2, '0')} - ${u[2]}` : e.title, blocked, pending: /pendente|aguard/i.test(e.title), known: !!(key && map[key]) };
+    }).filter(e => e.end >= t0 && e.start < t0 + 35 * 864e5).sort((a, b) => a.start - b.start);
+    return { ts: r.ts || null, ok: r.ok !== false, items };
+  }
+
   function publicState(s, isAdmin, meId) {
-    if (isAdmin) return Object.assign({}, s);
+    if (isAdmin) return Object.assign({}, s, { agenda: agenda(s), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
     const me = s.players.find(p => p.id === meId);
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
@@ -626,7 +652,8 @@
     const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.age; delete q.pin; if (p.id !== meId) delete q.phone; delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => !b.private || priv);
-    return Object.assign({}, s, { players, games, settings, bans, suggestions: [] });
+    delete settings.moradores;
+    return Object.assign({}, s, { players, games, settings, bans, suggestions: [], reservas: undefined, agenda: agenda(s) });
   }
 
   /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */
