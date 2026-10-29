@@ -266,9 +266,8 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   <button data-tab="lista"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/></svg>Lista</button>
   <button data-tab="times"><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>Times</button>
   <button data-tab="reservas"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Reservas</button>
-  <button data-tab="freq"><svg viewBox="0 0 24 24"><path d="M5 20V11M11 20V5M17 20v-6M3 20h18"/></svg>Frequência</button>
   <button data-tab="portaria" hidden><svg viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 4.5 3.4 8.4 8 9 4.6-.6 8-4.5 8-9V7l-8-4Z"/><path d="m9 12 2 2 4-4"/></svg>Portaria</button>
-  <button data-tab="mais"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>Mais</button>
+  <button data-tab="mais"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>Perfil</button>
 </div></nav>
 <div class="sheet" id="sheet" hidden></div>
 <div class="toast" id="toast" role="status" hidden></div>
@@ -293,7 +292,7 @@ const ICON = {
 };
 
 let S = null, D = null, version = null, isAdmin = false, mode = 'server', skew = 0;
-let me = store.get('me', null), tab = ['lista','times','reservas','freq','portaria','mais'].includes(store.get('tab', 'lista')) ? store.get('tab', 'lista') : 'lista', token = store.get('token', null), auth = store.get('auth', null);
+let me = store.get('me', null), tab = ['lista','times','reservas','portaria','mais'].includes(store.get('tab', 'lista')) ? store.get('tab', 'lista') : 'lista', token = store.get('token', null), auth = store.get('auth', null);
 function logoutPlayer() { me = null; auth = null; store.set('me', null); store.set('auth', null); }
 const hostTheme = document.documentElement.getAttribute('data-theme');
 const now = () => Date.now() + skew;
@@ -435,7 +434,7 @@ function render() {
   document.querySelectorAll('#main input[id], #main select[id], #main textarea[id]').forEach(el => { if (el.type !== 'checkbox' && el.type !== 'file') keep[el.id] = el.value; });
   const focusId = document.activeElement && document.activeElement.id;
   $('#hdr').innerHTML = renderHeader();
-  $('#main').innerHTML = ({ lista: renderLista, times: renderTimes, freq: renderFreq, reservas: renderReservas, portaria: isAdmin ? renderPortaria : renderLista, mais: renderMais }[tab] || renderLista)();
+  $('#main').innerHTML = ({ lista: renderLista, times: renderTimes, reservas: renderReservas, portaria: isAdmin ? renderPortaria : renderLista, mais: renderMais }[tab] || renderLista)();
   const pb = document.querySelector('#tabs [data-tab=portaria]'); if (pb) pb.hidden = !isAdmin;
   for (const id in keep) { const el = document.getElementById(id); if (el) el.value = keep[id]; }
   if (focusId) { const el = document.getElementById(focusId); if (el && el.focus) el.focus({ preventScroll: true }); }
@@ -474,7 +473,7 @@ function renderLista() {
   const priv = S.current && S.current.private;
   const members = S.players.filter(p => !p.guest && (!priv || p.priv)).sort(byName);
   const fxHere = p => !!(S.current && S.current.fixed && p.fixed && (!priv || p.priv));
-  if (!S.players.length) return demoNote + `<div class="card empty"><img class="mascot" src="${IMG.front}" alt=""><h2>Ninguém cadastrado ainda</h2><p>Quem é admin cadastra os jogadores em <b>Mais → Admin</b>.</p></div>`;
+  if (!S.players.length) return demoNote + `<div class="card empty"><img class="mascot" src="${IMG.front}" alt=""><h2>Ninguém cadastrado ainda</h2><p>Quem é admin cadastra os jogadores em <b>Perfil → Admin</b>.</p></div>`;
   const pos = {};
   D.fixed.forEach(id => pos[id] = '<span class="pos fx">comissão</span>');
   D.regular.forEach((id, i) => pos[id] = `<span class="pos">${i + 1}º</span>`);
@@ -578,7 +577,7 @@ function renderPortaria() {
       ${D.confirmed.map(pid => { const it = status(pid); return `<div class="res-row"><span class="nm">${h(nameOf(P(pid)))}</span>${badge(it)}</div>${it.msg ? `<p class="hint" style="color:#940B29">${h(it.msg)}</p>` : ''}`; }).join('') || '<p class="hint">Ninguém confirmado ainda.</p>'}
       <button class="btn btn-ghost" data-act="acesso-now" style="margin-top:12px">Liberar agora (lista atual)</button></div>
     <div class="card"><h2>Cadastro pra portaria</h2>
-      <p class="hint">Marque quem é <b>morador</b> ou quem já está <b>cadastrado</b> na portaria (esses não precisam de liberação). Os outros preenchem nome completo e CPF em Mais → Entrada no condomínio, ou você preenche aqui.</p>
+      <p class="hint">Marque quem é <b>morador</b> ou quem já está <b>cadastrado</b> na portaria (esses não precisam de liberação). Os outros preenchem nome completo e CPF em Perfil → Entrada no condomínio, ou você preenche aqui.</p>
       ${regs.map(q => `<details class="res-row" style="display:block"><summary style="display:flex;gap:10px;align-items:center;cursor:pointer"><span class="nm" style="flex:1">${h(q.name)}</span>${q.morador ? '<span class="ac-st ac-mor">Morador</span>' : q.cadastrado ? '<span class="ac-st ac-cad">Cadastrado</span>' : q.cpf ? '<span class="ac-st ac-ok">CPF ok</span>' : '<span class="ac-st ac-err">Sem CPF</span>'}</summary>
         <div style="padding:10px 0 4px"><button class="tog setter" aria-pressed="${!!q.morador}" data-morador="${q.id}">morador</button> <button class="tog setter" aria-pressed="${!!q.cadastrado}" data-cadastrado="${q.id}">cadastrado</button>
         ${q.morador || q.cadastrado ? '' : `<div class="field"><label for="fn-${q.id}">Nome completo</label><input type="text" id="fn-${q.id}" maxlength="70" value="${h(q.fullName || '')}"></div>
