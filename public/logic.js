@@ -11,7 +11,7 @@
   const SETTINGS_VERSION = 7;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'toggleMorador', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
@@ -271,6 +271,11 @@
 
   const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const randomLetter = () => LETTERS[Math.floor(Math.random() * LETTERS.length)];
+  const cpfOk = d => {
+    if (!/^\d{11}$/.test(d) || /^(\d)\1{10}$/.test(d)) return false;
+    const dv = n => { let s = 0; for (let i = 0; i < n; i++) s += Number(d[i]) * (n + 1 - i); const r = s * 10 % 11; return r === 10 ? 0 : r; };
+    return dv(9) === Number(d[9]) && dv(10) === Number(d[10]);
+  };
   const randomPin = () => String(Math.floor(Math.random() * 1000)).padStart(3, '0') + randomLetter();
   const normPin = v => String(v || '').replace(/\s+/g, '').toUpperCase();
   const fold = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
@@ -431,6 +436,20 @@
         p.phone = d ? (d.length <= 11 ? '55' + d : d) : '';
         return ok;
       }
+      case 'setCpf': {
+        /* CPF e nome completo pra liberar a entrada no condomínio (portaria). Só a pessoa e os admins veem. */
+        const p = pm[a.id];
+        if (!p || p.guest) return fail('Jogador não encontrado.');
+        if (!admin && a.id !== a.by) return fail('Cada um só cadastra o próprio CPF.');
+        const d = String(a.cpf || '').replace(/\D/g, '');
+        if (d && !cpfOk(d)) return fail('CPF inválido. Confira os números.');
+        const full = cleanName(a.fullName || '');
+        if (d && full.split(' ').filter(w => w.length >= 2).length < 2) return fail('Escreva seu nome completo (nome e sobrenome).');
+        p.cpf = d; p.fullName = d ? full : '';
+        return ok;
+      }
+      case 'toggleMorador': { const p = pm[a.id]; if (p && !p.guest) p.morador = !p.morador; return ok; }
+      case 'acessoNow': { s.acessoReq = { game: a.game, ts: now }; return ok; }
       case 'togglePaid': { const p = pm[a.id]; if (p) p.paid = !p.paid; return ok; }
       case 'toggleFixed': {
         const p = pm[a.id];
@@ -574,11 +593,14 @@
           return ok;
         }
         if (!p && name.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
+        const gcpf = String(a.cpf || '').replace(/\D/g, '');
+        if (gcpf && !cpfOk(gcpf)) return fail('CPF do convidado inválido. Confira os números.');
         if (!p) {
-          p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0 };
+          p = { id: newId(s, 'c'), name, gender: a.gender, skill: clampSkill(a.skill), paid: false, guest: true, fixed: false, priv: false, photo: null, freq: 0, cpf: gcpf, fullName: gcpf ? name : '' };
           s.players.push(p);
           v.players = s.players;
         }
+        if (p.guest && gcpf) { p.cpf = gcpf; p.fullName = p.name; }
         if (v.presences.some(x => x.pid === p.id)) return fail(`${p.name} já está na lista.`);
         v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now });
         log('add', p.id);
@@ -660,11 +682,11 @@
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
     for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
-    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.age; delete q.pin; if (p.id !== meId) delete q.phone; delete q.fails; delete q.lockUntil; return q; });
+    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.age; delete q.pin; if (p.id !== meId) { delete q.phone; delete q.cpf; delete q.fullName; } delete q.morador; delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => !b.private || priv);
     delete settings.moradores;
-    return Object.assign({}, s, { players, games, settings, bans, suggestions: [], reservas: undefined, agenda: agenda(s, 0, priv) });
+    return Object.assign({}, s, { players, games, settings, bans, suggestions: [], reservas: undefined, acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
   }
 
   /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */

@@ -52,6 +52,51 @@ async function syncReservas() {
 setTimeout(syncReservas, 5000);
 setInterval(syncReservas, 30 * 60000);
 
+/* 17h (lista fechada): libera na portaria quem vai jogar e não mora no condomínio. Admin pode pedir na hora. */
+let acessoBusy = false;
+async function syncAcessos() {
+  if (acessoBusy) return;
+  const cfg = VDS.readConfig();
+  if (!cfg || !cfg.user || !cfg.pass) return;
+  const now = Date.now();
+  state.acessos ||= {};
+  const req = state.acessoReq;
+  const todo = Object.values(state.games).filter(g => {
+    const a = state.acessos[g.meta.id];
+    if (req && req.game === g.meta.id && (!a || a.ts < req.ts)) return true;
+    return g.frozen && now - g.meta.cutoffAt < 4 * 3600e3 && now < g.meta.startAt + 6 * 3600e3 && (!a || (!a.done && (a.tries || 0) < 3 && now - a.ts > 5 * 60e3));
+  });
+  if (!todo.length) return;
+  acessoBusy = true;
+  try {
+    let existentes = null;
+    try { existentes = await VDS.listarAutorizacoes(cfg); } catch (e) { existentes = []; console.error('acessos/lista:', e.message); }
+    for (const g of todo) {
+      const id = g.meta.id, d = L.derive(L.view(state, id)), pm = Object.fromEntries(state.players.map(p => [p.id, p]));
+      const prev = state.acessos[id] || {};
+      const items = [];
+      for (const pid of d.confirmed) {
+        const p = pm[pid];
+        if (!p) continue;
+        const it = { pid, name: p.name };
+        if (p.morador) it.st = 'morador';
+        else if (!p.cpf) it.st = 'semcpf';
+        else {
+          try { it.st = await VDS.garantirAcesso(cfg, { cpf: p.cpf, nome: p.fullName || p.name }, id, existentes); }
+          catch (e) { it.st = 'erro'; it.msg = String(e.message || e).slice(0, 160); }
+        }
+        items.push(it);
+      }
+      const errs = items.filter(x => x.st === 'erro').length;
+      state.acessos[id] = { ts: Date.now(), done: !errs, tries: (prev.tries || 0) + 1, items };
+      console.log(`acessos ${id}: ` + items.map(x => x.name + '=' + x.st).join(', '));
+    }
+    if (req && todo.some(g => g.meta.id === req.game)) delete state.acessoReq;
+  } catch (e) { console.error('acessos:', e.message); }
+  finally { acessoBusy = false; version = Date.now(); save(); }
+}
+setInterval(() => syncAcessos().catch(e => console.error('acessos:', e.message)), 60000);
+
 const SECRET = 'gf-auth:' + ADMIN_PASSWORD;
 const adminToken = ADMIN_PASSWORD ? crypto.createHash('sha256').update('volei:' + ADMIN_PASSWORD).digest('hex') : null;
 const isAdmin = req => !!adminToken && req.headers['x-admin-token'] === adminToken;
