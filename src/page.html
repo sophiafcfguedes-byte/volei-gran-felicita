@@ -486,7 +486,7 @@ function renderLista() {
     const mine = isAdmin || p.id === me || (p.guest && allowGuests && (!pres || pres.by === me)) || (pres && pres.asGuest && pres.by === me);
     const on = !!pos[p.id], leaveAfterClose = on && mine && lk.reason === 'closed';
     const can = fxHere(p) ? canEditFixed(p) : (edit && mine && (isAdmin || !banned.has(p.id))) || leaveAfterClose;
-    return `<label class="row${on ? ' on' : ''}" data-n="${h(norm(p.name))}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${can ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${p.paid ? '<span class="paid">pago</span>' : ''}${pos[p.id] || (banned.has(p.id) ? '<span class="pos ban">suspenso</span>' : fxHere(p) ? '<span class="pos wait">não vai</span>' : '')}</label>`;
+    return `<label class="row${on ? ' on' : ''}" data-n="${h(norm(p.name))}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${can ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${p.''.trim() ? '' : ''}${pos[p.id] || (banned.has(p.id) ? '<span class="pos ban">suspenso</span>' : fxHere(p) ? '<span class="pos wait">não vai</span>' : '')}</label>`;
   };
   const section = (title, list) => list.length ? `<div class="card" data-sec><div class="sec-h"><h2>${title}</h2><span class="muted">${list.filter(p => pos[p.id]).length} de ${list.length}</span></div><div class="list">${list.map(row).join('')}</div></div>` : '';
   const guests = S.players.filter(p => p.guest && (allowGuests || pos[p.id])).sort((a, b) => (pos[b.id] ? 1 : 0) - (pos[a.id] ? 1 : 0) || byName(a, b));
@@ -497,8 +497,8 @@ function renderLista() {
   if (lk.reason === 'notOpen') lockMsg = `<div class="card opens"><img class="mascot sm" src="${IMG.front}" alt=""><div><b>O check-in abre ${h(opensText(S.current))}</b><div class="hint">${isAdmin ? 'Você é admin e já consegue mexer na lista.' : 'Volte nesse horário. Quem marcar primeiro garante a vaga.'}</div></div></div>`;
   else if (lk.reason === 'closed') lockMsg = `<div class="notice">A lista fechou às ${h(S.current.cutoff)} com os confirmados. A espera não sobe mais: quem sair agora deixa a vaga vazia e fica fora do próximo jogo.</div>`;
   else if (lk.locked && !isAdmin) lockMsg = `<div class="notice">A lista está fechada agora. Só quem é admin consegue mexer.</div>`;
-  const prio = S.settings.paidPriority;
-  const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} ${p.paid ? '<span class="paid">pago</span>' : ''}</span>${by || t}</li>`; };
+  const prio = false;
+  const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} ${p.''.trim() ? '' : ''}</span>${by || t}</li>`; };
   return `${demoNote}${renderWho()}${lockMsg}
     <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir até as ${h(S.current ? S.current.cutoff : '17:00')} do dia do jogo, quando a lista fecha. Cada um só marca e desmarca o próprio nome.</p>
     <div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
@@ -625,7 +625,6 @@ function renderMais() {
       <li>As vagas vão por ordem de check-in.</li>
       <li><b>Às ${h((sched[0] || {}).cutoff || '17:00')} do dia do jogo a lista fecha</b> com os confirmados. Até lá, se alguém sair, o primeiro da espera sobe sozinho; depois disso, ninguém mais entra.</li>
       <li><b>Desistência:</b> quem estava confirmado e tirar o nome depois que a lista fechou deixa a vaga vazia e fica fora do próximo jogo. Segunda e quinta contam juntas (saiu da segunda, perde a quinta; saiu da quinta, perde a segunda)${sched.some(g => g.private) ? '; a quarta conta separado (perde a quarta seguinte)' : ''}. Quem está na lista de espera pode sair sem problema.</li>
-      ${st.paidPriority ? '<li>Quem pagou a vaquinha passa na frente de quem não pagou.</li>' : ''}
       <li>Acabaram as vagas, entra na lista de espera, que sobe sozinha quando alguém desiste.</li>
       <li>Cada pessoa só marca e desmarca o próprio nome.${st.guestLimit ? ` Nos jogos que aceitam convidados, cada um pode trazer até ${st.guestLimit}, e só quem trouxe pode tirar.` : ''}</li>
       <li>Quando o jogo acaba, a lista zera sozinha e já mostra o próximo jogo. Quem estava confirmado ganha +1 na frequência${sched.some(g => g.private) ? ' (só segunda e quinta contam)' : ''}.</li>
@@ -659,14 +658,12 @@ function renderMais() {
       <div class="field"><label for="s-group">Nome do grupo</label><input type="text" id="s-group" value="${h(st.groupName)}"></div>
       <div class="field"><label for="s-limit">Quantos convidados cada um pode trazer</label><input type="number" id="s-limit" min="0" max="10" value="${st.guestLimit}"></div>
       <p class="hint">Vagas e número de times de cada jogo ficam em <b>Dias de jogo</b>, acima.</p>
-      <label class="check"><input type="checkbox" id="s-prio"${st.paidPriority ? ' checked' : ''}> Quem pagou a vaquinha passa na frente</label>
       <button class="btn btn-primary" data-act="save-settings">Salvar</button></div>
 
     <div class="card"><h2>Admin · Jogadores</h2>
       <div class="field"><label for="np-name">Novo jogador</label><input type="text" id="np-name" maxlength="40" placeholder="Nome"></div>
       <div class="grid2"><div class="field"><label for="np-gender">Gênero</label><select id="np-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
         <div class="field"><label for="np-skill">Nível</label><select id="np-skill">${opts(SKILLS, 3)}</select></div></div>
-      <label class="check"><input type="checkbox" id="np-paid"> Pagou a vaquinha</label>
       <label class="check"><input type="checkbox" id="np-fixed"> Comissão (vaga garantida)</label>
       <label class="check"><input type="checkbox" id="np-priv"> ${ICON.ball} Liberado pro vôlei de ${h(privLabel())}</label>
       <button class="btn btn-primary" data-act="add-player">Cadastrar</button>
@@ -680,7 +677,6 @@ function renderMais() {
         <div class="ctrls"><select data-edit="${q.id}" data-field="gender" aria-label="Gênero de ${h(q.name)}">${opts(GENDERS, q.gender)}</select>
           <select data-edit="${q.id}" data-field="skill" aria-label="Nível de ${h(q.name)}">${opts(SKILLS, q.skill)}</select>
           <select data-edit="${q.id}" data-field="age" aria-label="Faixa etária de ${h(q.name)}">${opts(AGES, q.age || 0)}</select>
-          <button class="tog setter" aria-pressed="${!!q.paid}" data-paid="${q.id}">pago</button>
           ${q.guest ? '' : `<button class="tog setter" aria-pressed="${!!q.fixed}" data-fixed="${q.id}">comissão</button><button class="tog setter" aria-pressed="${!!q.priv}" data-priv="${q.id}" title="Vê e faz check-in nos jogos fechados">${ICON.ball}${h(privLabel())}</button>`}
           <button class="btn btn-danger btn-sm" data-del="${q.id}" data-confirm>Excluir</button></div>
         ${q.guest ? '' : `<div class="pinrow"><span class="by">Senha:</span> <b class="pin">${q.pin ? h(q.pin) : '<span class="rem">sem senha</span>'}</b> <button class="link" data-newpin="${q.id}">${q.pin ? 'Trocar' : 'Gerar'}</button></div>
@@ -711,7 +707,7 @@ function renderMais() {
     <div class="card"><h2>Admin · Fim de jogo</h2>
       <p class="hint">O jogo encerra sozinho no horário de fim${S.current ? ` (${S.current.end})` : ''}. Use o botão só se quiser encerrar antes: ele soma 1 na frequência de quem estava confirmado e limpa a lista.</p>
       <button class="btn btn-danger" data-act="resetPresences" data-confirm>Encerrar agora e limpar lista</button>
-      <div class="btns"><button class="btn btn-danger" data-act="resetPaid" data-confirm>Zerar pagamentos</button><button class="btn btn-danger" data-act="resetFreq" data-confirm>Zerar frequência</button></div></div>
+      <div class="btns"><button class="btn btn-danger" data-act="resetFreq" data-confirm>Zerar frequência</button></div></div>
 
     <div class="card"><h2>Admin · Sugestões recebidas</h2>
       ${S.suggestions.length ? S.suggestions.map(x => `<div class="sug"><div>${h(x.text)}</div><div class="by">${x.by && P(x.by) ? h(P(x.by).name) : 'Anônima'} · ${fmtDay(x.ts)} · <button class="link" data-sugdel="${x.id}">apagar</button></div></div>`).join('') : '<p class="hint">Nenhuma sugestão por enquanto.</p>'}</div>`;
@@ -843,10 +839,10 @@ document.addEventListener('click', async e => {
     case 'sug-sign': return act({ type: 'suggest', text: val('sug-text'), anon: false }, 'Sugestão enviada. Obrigado!', ['sug-text']);
     case 'login': return act({ type: 'login', password: val('adm-pw') }, 'Você entrou como admin.', ['adm-pw']);
     case 'logout': token = null; store.set('token', null); isAdmin = false; await poll(); render(); return;
-    case 'save-settings': return act({ type: 'settings', groupName: val('s-group'), guestLimit: val('s-limit'), paidPriority: document.getElementById('s-prio').checked }, 'Salvo.');
+    case 'save-settings': return act({ type: 'settings', groupName: val('s-group'), guestLimit: val('s-limit'), paidPriority: false }, 'Salvo.');
     case 'save-sched': return act({ type: 'schedule', schedule: readSched() }, 'Dias salvos.');
     case 'add-sched': { const list = readSched(); const used = new Set(list.map(g => g.day)); const day = [1, 2, 3, 4, 5, 6, 0].find(d => !used.has(d)); if (day === undefined) return; list.push({ day, start: '19:00', end: '22:00', openDay: (day + 6) % 7, openTime: '12:00', max: 24, teams: 4, fixed: true, guests: true, private: false }); return act({ type: 'schedule', schedule: list }, 'Dia adicionado.'); }
-    case 'add-player': return act({ type: 'savePlayer', name: val('np-name'), gender: val('np-gender'), skill: val('np-skill'), paid: document.getElementById('np-paid').checked, fixed: document.getElementById('np-fixed').checked, priv: document.getElementById('np-priv').checked }, 'Jogador cadastrado.', ['np-name']);
+    case 'add-player': return act({ type: 'savePlayer', name: val('np-name'), gender: val('np-gender'), skill: val('np-skill'), fixed: document.getElementById('np-fixed').checked, priv: document.getElementById('np-priv').checked }, 'Jogador cadastrado.', ['np-name']);
     case 'lock': return act({ type: 'lockNow', minutes: val('lk-min') }, 'Lista fechada.');
     case 'unlock': return act({ type: 'unlock' }, 'Lista reaberta.');
     case 'resetPresences': return act({ type: 'resetPresences' }, 'Jogo encerrado. Frequência atualizada.');
