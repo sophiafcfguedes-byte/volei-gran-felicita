@@ -551,18 +551,10 @@ function renderReservas() {
   const A = RAW.agenda;
   if (!A) return `<div class="card"><h2>Reservas da quadra</h2><p class="hint">As reservas ainda não foram ligadas. Assim que a comissão configurar, elas aparecem aqui.</p></div>`;
   const hm = ts => { const d = new Date(ts - 3 * 3600e3); return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); };
-  const endHm = ts => hm(ts + 1000);
-  const days = [];
-  for (const e of A.items) {
-    const q = spDate(e.start), key = `${LG.DAYS[q.wd]}, ${q.d}/${q.m + 1}`;
-    let d = days[days.length - 1];
-    if (!d || d.key !== key) days.push(d = { key, list: [] });
-    d.list.push(e);
-  }
   const upd = A.ts ? (() => { const q = spDate(A.ts); return `Atualizado ${q.d}/${q.m + 1} às ${hm(A.ts)}`; })() : '';
   return `<div class="card"><h2>Reservas da quadra</h2>
-    <p class="hint">Direto do Vida de Síndico. ${h(upd)}${A.ok ? '' : ' · não consegui atualizar agora'}</p>
-    ${days.length ? days.map(d => `<div class="res-day">${h(d.key)}</div>${d.list.map(e => `<div class="res-row${e.blocked ? ' blk' : ''}"><span class="hr">${hm(e.start)} – ${endHm(e.end)}</span><span class="nm">${h(e.who)}</span>${e.pending ? '<span class="tag">pendente</span>' : ''}</div>`).join('')}`).join('') : '<p class="hint">Nenhuma reserva nos próximos dias.</p>'}
+    <p class="hint">Próximos 30 dias, das 19h às 21h. Direto do Vida de Síndico. ${h(upd)}${A.ok ? '' : ' · não consegui atualizar agora'}</p>
+    ${(A.days || []).map(d => { const q = spDate(d.date + 12 * 3600e3); return `<div class="res-day">${LG.DAYS[d.wd]}, ${q.d}/${q.m + 1}${d.wd === 3 ? ' ' + ICON.ball : ''}</div>${d.slots.map(e => `<div class="res-row${e.blocked ? ' blk' : ''}"><span class="hr">${hm(e.start)} – ${hm(e.end)}</span><span class="nm">${e.who ? h(e.who) : '<span class="by">Sem reserva</span>'}</span>${e.pending ? '<span class="tag">pendente</span>' : ''}</div>`).join('')}`; }).join('')}
   </div>`;
 }
 

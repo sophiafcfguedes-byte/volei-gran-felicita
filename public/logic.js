@@ -627,21 +627,31 @@
     }
     return map;
   }
-  /* Só segunda e quinta (e quarta pra quem é da bolinha). */
+  /* Próximos 30 dias: segunda e quinta (e quarta pra quem é da bolinha), horários das 19h às 21h. */
   function agenda(s, now, withWed) {
     now = now || Date.now();
     const r = s.reservas;
     if (!r) return null;
     const map = parseMoradores(s.settings.moradores);
-    const today = spParts(now), t0 = spTs(today.y, today.m, today.d, '00:00');
     const toTs = iso => Date.parse(iso + '-03:00');
-    const items = (r.list || []).map(e => {
+    const evs = (r.list || []).map(e => {
       const u = e.title.match(/torre\s*0*(\d+)\s*-\s*(\w+)/i);
       const key = u ? u[1] + '-' + u[2] : null;
       const blocked = /interdit/i.test(e.title);
-      return { start: toTs(e.start), end: toTs(e.end), who: blocked ? 'Interditado' : key && map[key] ? map[key] : u ? `Torre ${u[1].padStart(2, '0')} - ${u[2]}` : e.title, blocked, pending: /pendente|aguard/i.test(e.title), known: !!(key && map[key]) };
-    }).filter(e => { const wd = spParts(e.start).wd; return wd === 1 || wd === 4 || (withWed && wd === 3); }).filter(e => e.end >= t0 && e.start < t0 + 35 * 864e5).sort((a, b) => a.start - b.start);
-    return { ts: r.ts || null, ok: r.ok !== false, items };
+      return { start: toTs(e.start), end: toTs(e.end), who: blocked ? 'Interditado' : key && map[key] ? map[key] : u ? `Torre ${u[1].padStart(2, '0')} - ${u[2]}` : e.title, blocked, pending: /pendente|aguard/i.test(e.title) };
+    });
+    const today = spParts(now), days = [];
+    for (let i = 0; i < 30; i++) {
+      const q = spParts(Date.UTC(today.y, today.m, today.d + i, 12) - SP);
+      if (!(q.wd === 1 || q.wd === 4 || (withWed && q.wd === 3))) continue;
+      const slots = [19, 20].map(h => {
+        const a = spTs(q.y, q.m, q.d, h + ':00'), b = a + 3600e3;
+        const hit = evs.filter(e => e.start < b && e.end > a).sort((x, y) => x.blocked - y.blocked)[0];
+        return { start: a, end: b, who: hit ? hit.who : null, blocked: !!(hit && hit.blocked), pending: !!(hit && hit.pending) };
+      });
+      days.push({ date: spTs(q.y, q.m, q.d, '00:00'), wd: q.wd, slots });
+    }
+    return { ts: r.ts || null, ok: r.ok !== false, days };
   }
 
   function publicState(s, isAdmin, meId) {
