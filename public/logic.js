@@ -627,7 +627,8 @@
     }
     return map;
   }
-  function agenda(s, now) {
+  /* Só segunda e quinta (e quarta pra quem é da bolinha). */
+  function agenda(s, now, withWed) {
     now = now || Date.now();
     const r = s.reservas;
     if (!r) return null;
@@ -639,12 +640,12 @@
       const key = u ? u[1] + '-' + u[2] : null;
       const blocked = /interdit/i.test(e.title);
       return { start: toTs(e.start), end: toTs(e.end), who: blocked ? 'Interditado' : key && map[key] ? map[key] : u ? `Torre ${u[1].padStart(2, '0')} - ${u[2]}` : e.title, blocked, pending: /pendente|aguard/i.test(e.title), known: !!(key && map[key]) };
-    }).filter(e => e.end >= t0 && e.start < t0 + 35 * 864e5).sort((a, b) => a.start - b.start);
+    }).filter(e => { const wd = spParts(e.start).wd; return wd === 1 || wd === 4 || (withWed && wd === 3); }).filter(e => e.end >= t0 && e.start < t0 + 35 * 864e5).sort((a, b) => a.start - b.start);
     return { ts: r.ts || null, ok: r.ok !== false, items };
   }
 
   function publicState(s, isAdmin, meId) {
-    if (isAdmin) return Object.assign({}, s, { agenda: agenda(s), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
+    if (isAdmin) return Object.assign({}, s, { agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
     const me = s.players.find(p => p.id === meId);
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
@@ -653,7 +654,7 @@
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => !b.private || priv);
     delete settings.moradores;
-    return Object.assign({}, s, { players, games, settings, bans, suggestions: [], reservas: undefined, agenda: agenda(s) });
+    return Object.assign({}, s, { players, games, settings, bans, suggestions: [], reservas: undefined, agenda: agenda(s, 0, priv) });
   }
 
   /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */
