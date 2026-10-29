@@ -509,7 +509,7 @@ function renderLista() {
       <div class="field"><label for="g-name">Nome e sobrenome</label><input type="text" id="g-name" maxlength="40" autocomplete="off" placeholder="Nome e sobrenome"></div>
       <div class="grid2"><div class="field"><label for="g-gender">Gênero</label><select id="g-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
       <div class="field"><label for="g-skill">Nível</label><select id="g-skill">${opts(SKILLS, 3)}</select></div></div>
-      <div class="field"><label for="g-cpf">CPF do convidado (obrigatório, pra liberar na portaria)</label><input type="text" id="g-cpf" inputmode="numeric" maxlength="14" autocomplete="off" placeholder="000.000.000-00"></div>
+      <div class="field"><label for="g-cpf">CPF do convidado (pra liberar na portaria${P(me) && P(me).morador ? ', opcional pra morador' : ', obrigatório'})</label><input type="text" id="g-cpf" inputmode="numeric" maxlength="14" autocomplete="off" placeholder="000.000.000-00"></div>
       <button class="btn btn-primary" data-act="addGuest">Adicionar convidado</button></div>` : ''}
     <div class="card"><div class="sec-h"><h2>Confirmados</h2><span class="muted">${D.confirmed.length}/${S.settings.max}</span></div>
       ${D.fixed.length ? `<ul class="conf fx">${D.fixed.map(id => `<li>${avatar(P(id))}<span class="nm">${h(nameOf(P(id)))}</span><span class="by">vaga garantida</span></li>`).join('')}</ul>` : ''}
@@ -566,7 +566,7 @@ function renderReservas() {
 
 function renderPortaria() {
   const g = S.current, A = (RAW.acessos || {})[g ? g.id : ''] || null;
-  const ST = { criada: ['Liberado agora', 'ac-ok'], ja: ['Já tinha acesso', 'ac-ok'], morador: ['Morador', 'ac-mor'], cadastrado: ['Cadastrado', 'ac-cad'], semcpf: ['Sem CPF', 'ac-err'], erro: ['Erro', 'ac-err'] };
+  const ST = { criada: ['Liberado agora', 'ac-ok'], ja: ['Já tinha acesso', 'ac-ok'], morador: ['Morador', 'ac-mor'], cadastrado: ['Cadastrado', 'ac-cad'], convmorador: ['Convidado de morador', 'ac-mor'], semcpf: ['Sem CPF', 'ac-err'], erro: ['Erro', 'ac-err'] };
   const hm = ts => { const d = new Date(ts - 3 * 3600e3); return `${d.getUTCDate()}/${d.getUTCMonth() + 1} às ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; };
   const D = LG.derive(S);
   const status = pid => { const it = A && A.items.find(x => x.pid === pid); if (it) return it; const p = P(pid); return { st: p && p.morador ? 'morador' : p && p.cadastrado ? 'cadastrado' : p && p.cpf ? 'pronto' : 'semcpf' }; };

@@ -81,6 +81,7 @@ async function syncAcessos() {
         const it = { pid, name: p.name };
         if (p.morador) it.st = 'morador';
         else if (p.cadastrado) it.st = 'cadastrado';
+        else if (p.guest && !p.cpf && (() => { const pr = (state.games[id].presences || []).find(x => x.pid === pid); return pr && pm[pr.by] && pm[pr.by].morador; })()) it.st = 'convmorador';
         else if (!p.cpf) it.st = 'semcpf';
         else {
           try { it.st = await VDS.garantirAcesso(cfg, { cpf: p.cpf, nome: p.fullName || p.name }, id, existentes); }
