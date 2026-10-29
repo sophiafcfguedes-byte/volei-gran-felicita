@@ -693,6 +693,13 @@
 
   /* Situação de cada jogo para o robô do WhatsApp avisar quando a lista completa
      (jogo fechado → grupo da quarta; os outros → grupo principal). Só para uso interno. */
+  /* Nome dos times: segunda/quinta têm cor; quarta fica Time 1, Time 2. */
+  const TEAM_COLORS = [['Amarelo', '🟡'], ['Azul', '🔵'], ['Verde', '🟢'], ['Laranja', '🟠']];
+  function teamName(meta, i) {
+    const c = !meta || meta.private ? null : TEAM_COLORS[i];
+    return c ? `${c[1]} Time ${c[0]}` : `Time ${i + 1}`;
+  }
+
   function avisos(s, now) {
     now = now || Date.now();
     const pm = playerMap(s), out = [];
@@ -711,7 +718,7 @@
       let teams = null;
       if (g.teams && g.teams.auto && g.teams.list.length) {
         const tl = [`🏐 *TIMES — VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} — ${dd}*`];
-        g.teams.list.forEach((t, i) => { tl.push('', `*Time ${i + 1}*`, ...t.filter(id => pm[id]).map(id => '• ' + nm(id))); });
+        g.teams.list.forEach((t, i) => { tl.push('', `*${teamName(g.meta, i)}*`, ...t.filter(id => pm[id]).map(id => '• ' + nm(id))); });
         teams = { key: g.meta.id + ':times:' + g.teams.ts, text: tl.join('\n') };
       }
       /* Segunda/quinta às 13h: se ainda sobrar vaga, chama todo mundo no grupo (uma vez). */
@@ -725,5 +732,5 @@
     return { games: out };
   }
 
-  return { labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  return { teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });

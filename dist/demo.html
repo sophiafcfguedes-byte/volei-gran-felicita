@@ -965,6 +965,13 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
 
   /* Situação de cada jogo para o robô do WhatsApp avisar quando a lista completa
      (jogo fechado → grupo da quarta; os outros → grupo principal). Só para uso interno. */
+  /* Nome dos times: segunda/quinta têm cor; quarta fica Time 1, Time 2. */
+  const TEAM_COLORS = [['Amarelo', '🟡'], ['Azul', '🔵'], ['Verde', '🟢'], ['Laranja', '🟠']];
+  function teamName(meta, i) {
+    const c = !meta || meta.private ? null : TEAM_COLORS[i];
+    return c ? `${c[1]} Time ${c[0]}` : `Time ${i + 1}`;
+  }
+
   function avisos(s, now) {
     now = now || Date.now();
     const pm = playerMap(s), out = [];
@@ -983,7 +990,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       let teams = null;
       if (g.teams && g.teams.auto && g.teams.list.length) {
         const tl = [`🏐 *TIMES — VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} — ${dd}*`];
-        g.teams.list.forEach((t, i) => { tl.push('', `*Time ${i + 1}*`, ...t.filter(id => pm[id]).map(id => '• ' + nm(id))); });
+        g.teams.list.forEach((t, i) => { tl.push('', `*${teamName(g.meta, i)}*`, ...t.filter(id => pm[id]).map(id => '• ' + nm(id))); });
         teams = { key: g.meta.id + ':times:' + g.teams.ts, text: tl.join('\n') };
       }
       /* Segunda/quinta às 13h: se ainda sobrar vaga, chama todo mundo no grupo (uma vez). */
@@ -997,7 +1004,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     return { games: out };
   }
 
-  return { labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  return { teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });
 
 </script>
@@ -1262,7 +1269,7 @@ function renderTimes() {
         const ps = t.map(P).filter(Boolean);
         const sum = ps.reduce((a, p) => a + (Number(p.skill) || 0), 0);
         const f = ps.filter(p => p.gender === 'F').length;
-        return `<section class="team"><header><h3>Time ${i + 1}</h3><span class="small">${ps.length} jogadores</span></header><ul>${ps.map(p => `<li>${avatar(p)}<span>${h(nameOf(p))}</span></li>`).join('')}</ul>
+        return `<section class="team"><header><h3>${h(LG.teamName(S.current || S.meta, i))}</h3><span class="small">${ps.length} jogadores</span></header><ul>${ps.map(p => `<li>${avatar(p)}<span>${h(nameOf(p))}</span></li>`).join('')}</ul>
           <footer>${ps.length - f} homens · ${f} mulheres${isAdmin ? ` · nível ${sum}` : ''}${ps.length > 6 ? `<br><b>Time com ${ps.length}:</b> joga quem chegar primeiro, os outros entram no rodízio.` : ''}</footer></section>`; }).join('')}</div>
       <p class="hint">${S.teams.auto ? `Sorteado automaticamente às ${fmtTime(S.teams.ts)}, quando a lista fechou` : `Sorteado às ${fmtTime(S.teams.ts)}${S.teams.by && P(S.teams.by) ? ' por ' + h(P(S.teams.by).name) : ''}`}.</p>
       <a class="btn btn-wa" href="${h(waLink(teamsText()))}" target="_blank" rel="noopener">${ICON.wa}Mandar times no WhatsApp</a>`;
@@ -1275,7 +1282,7 @@ function renderTimes() {
     ${teamsHtml}`;
 }
 function teamsText() {
-  return [`🏐 *Times — ${gameTitle()}*`, ...S.teams.list.map((t, i) => `\n*Time ${i + 1}*\n` + t.map(P).filter(Boolean).map(p => '• ' + nameOf(p)).join('\n'))].join('\n');
+  return [`🏐 *Times — ${gameTitle()}*`, ...S.teams.list.map((t, i) => `\n*${LG.teamName(S.current || S.meta, i)}*\n` + t.map(P).filter(Boolean).map(p => '• ' + nameOf(p)).join('\n'))].join('\n');
 }
 
 function renderReservas() {
