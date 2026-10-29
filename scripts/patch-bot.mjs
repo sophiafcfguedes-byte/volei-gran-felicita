@@ -65,6 +65,20 @@ async function avisosTick() {
       if (old) { await wait(1500); try { await sock.sendMessage(groupId, { delete: old }); } catch (e) { logErr('Não consegui apagar a lista anterior:', e.message); } }
     } catch (e) { logErr('Não consegui mandar a lista:', e.message); }
   }
+  // 13h de segunda/quinta com vaga sobrando: "@todos faltam X vagas", marcando todo mundo do grupo.
+  for (const g of data.games || []) {
+    const groupId = rt[g.group]?.groupId;
+    if (!groupId || !g.vagas || state.avisos[g.vagas.key]) continue;
+    state.avisos[g.vagas.key] = Date.now(); saveState();
+    try {
+      let mentions = [];
+      try { mentions = (await sock.groupMetadata(groupId)).participants.map((p) => p.id); } catch (e) {}
+      let text = g.vagas.text;
+      if (AVISOS.publicUrl) text += '\n' + AVISOS.publicUrl;
+      await sock.sendMessage(groupId, { text, mentions });
+      log('Aviso de vagas enviado (' + g.id + ').');
+    } catch (e) { logErr('Não consegui mandar o aviso de vagas:', e.message); }
+  }
   // Times sorteados às 17h: manda uma vez no grupo do jogo.
   for (const g of data.games || []) {
     const groupId = rt[g.group]?.groupId;

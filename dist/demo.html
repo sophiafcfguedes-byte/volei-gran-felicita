@@ -920,7 +920,8 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
 
   /* Situação de cada jogo para o robô do WhatsApp avisar quando a lista completa
      (jogo fechado → grupo da quarta; os outros → grupo principal). Só para uso interno. */
-  function avisos(s) {
+  function avisos(s, now) {
+    now = now || Date.now();
     const pm = playerMap(s), out = [];
     for (const g of Object.values(s.games).sort((a, b) => a.meta.startAt - b.meta.startAt)) {
       const nm = id => labelIn(pm, g.presences, id);
@@ -940,7 +941,13 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         g.teams.list.forEach((t, i) => { tl.push('', `*Time ${i + 1}*`, ...t.filter(id => pm[id]).map(id => '• ' + nm(id))); });
         teams = { key: g.meta.id + ':times:' + g.teams.ts, text: tl.join('\n') };
       }
-      out.push({ teams, promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
+      /* Segunda/quinta às 13h: se ainda sobrar vaga, chama todo mundo no grupo (uma vez). */
+      let vagas = null;
+      const t13 = spTs(p.y, p.m, p.d, '13:00'), left = g.meta.max - d.confirmed.length;
+      if (!g.meta.private && left > 0 && !g.frozen && now >= t13 && now < g.meta.cutoffAt) {
+        vagas = { key: g.meta.id + ':vagas13', text: `@todos faltam ${left} ${left === 1 ? 'vaga' : 'vagas'} a ${left === 1 ? 'ser preenchida' : 'serem preenchidas'} pro vôlei de hoje (${g.meta.start}).` };
+      }
+      out.push({ vagas, teams, promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
     }
     return { games: out };
   }
