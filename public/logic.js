@@ -691,7 +691,9 @@
         const pr = (g.presences || []).find(x => x.pid === pid) || { pid };
         const p = pm[pr.pid]; if (!p) continue;
         const it = ran && ran.items.find(x => x.pid === pr.pid);
-        m[pr.pid] = it ? it.st : p.morador ? 'morador' : p.cadastrado ? 'cadastrado' : p.cpf ? 'pronto' : (p.guest && pm[pr.by] && pm[pr.by].morador) ? 'convmorador' : 'semcpf';
+        /* Cadastro atual manda: morador/cadastrado mudados depois das 17h aparecem na hora. */
+        const now = p.morador ? 'morador' : p.cadastrado ? 'cadastrado' : p.cpf ? 'pronto' : (p.guest && pm[pr.by] && pm[pr.by].morador) ? 'convmorador' : 'semcpf';
+        m[pr.pid] = it && (it.st === 'criada' || it.st === 'ja' || it.st === 'erro') && now === 'pronto' ? it.st : now;
       }
       out[id] = { ts: ran ? ran.ts : null, st: m };
     }
