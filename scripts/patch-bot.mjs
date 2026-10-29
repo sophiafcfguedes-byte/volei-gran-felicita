@@ -74,7 +74,7 @@ async function avisosTick() {
       let mentions = [];
       try { mentions = (await sock.groupMetadata(groupId)).participants.map((p) => p.id); } catch (e) {}
       let text = g.vagas.text;
-      if (AVISOS.publicUrl) text += '\n' + AVISOS.publicUrl;
+      if (AVISOS.publicUrl) text += '\\n' + AVISOS.publicUrl;
       await sock.sendMessage(groupId, { text, mentions });
       log('Aviso de vagas enviado (' + g.id + ').');
     } catch (e) { logErr('Não consegui mandar o aviso de vagas:', e.message); }
