@@ -486,7 +486,7 @@ function renderLista() {
     const mine = isAdmin || p.id === me || (p.guest && allowGuests && (!pres || pres.by === me)) || (pres && pres.asGuest && pres.by === me);
     const on = !!pos[p.id], leaveAfterClose = on && mine && lk.reason === 'closed';
     const can = fxHere(p) ? canEditFixed(p) : (edit && mine && (isAdmin || !banned.has(p.id))) || leaveAfterClose;
-    return `<label class="row${on ? ' on' : ''}" data-n="${h(norm(p.name))}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${can ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${p.''.trim() ? '' : ''}${pos[p.id] || (banned.has(p.id) ? '<span class="pos ban">suspenso</span>' : fxHere(p) ? '<span class="pos wait">não vai</span>' : '')}</label>`;
+    return `<label class="row${on ? ' on' : ''}" data-n="${h(norm(p.name))}"><input type="checkbox" data-toggle="${p.id}"${on ? ' checked' : ''}${can ? '' : ' disabled'} aria-label="${h(nameOf(p))}">${avatar(p)}<span class="nm">${h(nameOf(p))}</span>${pos[p.id] || (banned.has(p.id) ? '<span class="pos ban">suspenso</span>' : fxHere(p) ? '<span class="pos wait">não vai</span>' : '')}</label>`;
   };
   const section = (title, list) => list.length ? `<div class="card" data-sec><div class="sec-h"><h2>${title}</h2><span class="muted">${list.filter(p => pos[p.id]).length} de ${list.length}</span></div><div class="list">${list.map(row).join('')}</div></div>` : '';
   const guests = S.players.filter(p => p.guest && (allowGuests || pos[p.id])).sort((a, b) => (pos[b.id] ? 1 : 0) - (pos[a.id] ? 1 : 0) || byName(a, b));
@@ -498,7 +498,7 @@ function renderLista() {
   else if (lk.reason === 'closed') lockMsg = `<div class="notice">A lista fechou às ${h(S.current.cutoff)} com os confirmados. A espera não sobe mais: quem sair agora deixa a vaga vazia e fica fora do próximo jogo.</div>`;
   else if (lk.locked && !isAdmin) lockMsg = `<div class="notice">A lista está fechada agora. Só quem é admin consegue mexer.</div>`;
   const prio = false;
-  const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} ${p.''.trim() ? '' : ''}</span>${by || t}</li>`; };
+  const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} </span>${by || t}</li>`; };
   return `${demoNote}${renderWho()}${lockMsg}
     <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir até as ${h(S.current ? S.current.cutoff : '17:00')} do dia do jogo, quando a lista fecha. Cada um só marca e desmarca o próprio nome.</p>
     <div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
