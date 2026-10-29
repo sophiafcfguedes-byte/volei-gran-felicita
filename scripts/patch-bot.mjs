@@ -71,14 +71,10 @@ async function avisosTick() {
     if (!groupId || !g.vagas || state.avisos[g.vagas.key]) continue;
     state.avisos[g.vagas.key] = Date.now(); saveState();
     try {
-      let mentions = [];
-      try { mentions = (await sock.groupMetadata(groupId)).participants.map((p) => p.id); } catch (e) { logErr('Não consegui ler os membros do grupo:', e.message); }
-      // Marca todo mundo do grupo no começo: @fulano @ciclano ... e depois o aviso.
-      const tags = mentions.map((j) => '@' + String(j).split('@')[0].split(':')[0]).join(' ');
-      let text = (tags ? tags + '\\n\\n' : '') + g.vagas.text;
-      log('Aviso de vagas: marcando ' + mentions.length + ' pessoa(s).');
+      // @all nativo do WhatsApp (o "@todos" verde): mentionAll no Baileys novo = contextInfo.nonJidMentions = 1.
+      let text = '@all ' + g.vagas.text;
       if (AVISOS.publicUrl) text += '\\n' + AVISOS.publicUrl;
-      await sock.sendMessage(groupId, { text, mentions });
+      await sock.sendMessage(groupId, { text, mentionAll: true, contextInfo: { nonJidMentions: 1 } });
       log('Aviso de vagas enviado (' + g.id + ').');
     } catch (e) { logErr('Não consegui mandar o aviso de vagas:', e.message); }
   }
