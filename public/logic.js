@@ -11,7 +11,7 @@
   const SETTINGS_VERSION = 7;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'draw', 'role', 'toggleMorador', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
@@ -451,6 +451,7 @@
         return ok;
       }
       case 'toggleMorador': { const p = pm[a.id]; if (p && !p.guest) p.morador = !p.morador; return ok; }
+      case 'toggleCadastrado': { const p = pm[a.id]; if (p && !p.guest) p.cadastrado = !p.cadastrado; return ok; }
       case 'acessoNow': { s.acessoReq = { game: a.game, ts: now }; return ok; }
       case 'togglePaid': { const p = pm[a.id]; if (p) p.paid = !p.paid; return ok; }
       case 'toggleFixed': {
@@ -684,7 +685,7 @@
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
     for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
-    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.age; delete q.pin; if (p.id !== meId) { delete q.phone; delete q.cpf; delete q.fullName; } delete q.morador; delete q.fails; delete q.lockUntil; return q; });
+    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.age; delete q.pin; if (p.id !== meId) { delete q.phone; delete q.cpf; delete q.fullName; } delete q.morador; delete q.cadastrado; delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => !b.private || priv);
     delete settings.moradores;

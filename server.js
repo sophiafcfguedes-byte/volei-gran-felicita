@@ -80,6 +80,7 @@ async function syncAcessos() {
         if (!p) continue;
         const it = { pid, name: p.name };
         if (p.morador) it.st = 'morador';
+        else if (p.cadastrado) it.st = 'cadastrado';
         else if (!p.cpf) it.st = 'semcpf';
         else {
           try { it.st = await VDS.garantirAcesso(cfg, { cpf: p.cpf, nome: p.fullName || p.name }, id, existentes); }

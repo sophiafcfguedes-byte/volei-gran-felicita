@@ -566,10 +566,10 @@ function renderReservas() {
 
 function renderPortaria() {
   const g = S.current, A = (RAW.acessos || {})[g ? g.id : ''] || null;
-  const ST = { criada: ['Liberado agora', 'ac-ok'], ja: ['Já tinha acesso', 'ac-ok'], morador: ['Morador', 'ac-mor'], semcpf: ['Sem CPF', 'ac-warn'], erro: ['Erro', 'ac-err'] };
+  const ST = { criada: ['Liberado agora', 'ac-ok'], ja: ['Já tinha acesso', 'ac-ok'], morador: ['Morador', 'ac-mor'], cadastrado: ['Cadastrado', 'ac-mor'], semcpf: ['Sem CPF', 'ac-warn'], erro: ['Erro', 'ac-err'] };
   const hm = ts => { const d = new Date(ts - 3 * 3600e3); return `${d.getUTCDate()}/${d.getUTCMonth() + 1} às ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; };
   const D = LG.derive(S);
-  const status = pid => { const it = A && A.items.find(x => x.pid === pid); if (it) return it; const p = P(pid); return { st: p && p.morador ? 'morador' : p && p.cpf ? 'pronto' : 'semcpf' }; };
+  const status = pid => { const it = A && A.items.find(x => x.pid === pid); if (it) return it; const p = P(pid); return { st: p && p.morador ? 'morador' : p && p.cadastrado ? 'cadastrado' : p && p.cpf ? 'pronto' : 'semcpf' }; };
   const badge = it => it.st === 'pronto' ? '<span class="ac-st ac-ok">CPF ok · libera às 17h</span>' : `<span class="ac-st ${ST[it.st][1]}" ${it.msg ? `title="${h(it.msg)}"` : ''}>${ST[it.st][0]}</span>`;
   const regs = S.players.filter(p => !p.guest).slice().sort(byName);
   return `<div class="card"><h2>Portaria · ${h(gameTitle())}</h2>
@@ -577,10 +577,10 @@ function renderPortaria() {
       ${D.confirmed.map(pid => { const it = status(pid); return `<div class="res-row"><span class="nm">${h(nameOf(P(pid)))}</span>${badge(it)}</div>${it.msg ? `<p class="hint" style="color:#940B29">${h(it.msg)}</p>` : ''}`; }).join('') || '<p class="hint">Ninguém confirmado ainda.</p>'}
       <button class="btn btn-ghost" data-act="acesso-now" style="margin-top:12px">Liberar agora (lista atual)</button></div>
     <div class="card"><h2>Cadastro pra portaria</h2>
-      <p class="hint">Marque quem é <b>morador</b> (não precisa de liberação). Os outros preenchem nome completo e CPF em Mais → Entrada no condomínio, ou você preenche aqui.</p>
-      ${regs.map(q => `<details class="res-row" style="display:block"><summary style="display:flex;gap:10px;align-items:center;cursor:pointer"><span class="nm" style="flex:1">${h(q.name)}</span>${q.morador ? '<span class="ac-st ac-mor">Morador</span>' : q.cpf ? '<span class="ac-st ac-ok">CPF ok</span>' : '<span class="ac-st ac-warn">Sem CPF</span>'}</summary>
-        <div style="padding:10px 0 4px"><button class="tog setter" aria-pressed="${!!q.morador}" data-morador="${q.id}">morador</button>
-        ${q.morador ? '' : `<div class="field"><label for="fn-${q.id}">Nome completo</label><input type="text" id="fn-${q.id}" maxlength="70" value="${h(q.fullName || '')}"></div>
+      <p class="hint">Marque quem é <b>morador</b> ou quem já está <b>cadastrado</b> na portaria (esses não precisam de liberação). Os outros preenchem nome completo e CPF em Mais → Entrada no condomínio, ou você preenche aqui.</p>
+      ${regs.map(q => `<details class="res-row" style="display:block"><summary style="display:flex;gap:10px;align-items:center;cursor:pointer"><span class="nm" style="flex:1">${h(q.name)}</span>${q.morador ? '<span class="ac-st ac-mor">Morador</span>' : q.cadastrado ? '<span class="ac-st ac-mor">Cadastrado</span>' : q.cpf ? '<span class="ac-st ac-ok">CPF ok</span>' : '<span class="ac-st ac-warn">Sem CPF</span>'}</summary>
+        <div style="padding:10px 0 4px"><button class="tog setter" aria-pressed="${!!q.morador}" data-morador="${q.id}">morador</button> <button class="tog setter" aria-pressed="${!!q.cadastrado}" data-cadastrado="${q.id}">cadastrado</button>
+        ${q.morador || q.cadastrado ? '' : `<div class="field"><label for="fn-${q.id}">Nome completo</label><input type="text" id="fn-${q.id}" maxlength="70" value="${h(q.fullName || '')}"></div>
         <div class="field"><label for="cpf-${q.id}">CPF</label><input type="text" id="cpf-${q.id}" inputmode="numeric" maxlength="14" value="${h(q.cpf || '')}"></div>
         <button class="btn btn-primary btn-sm" data-savecpf="${q.id}">Salvar</button>`}</div></details>`).join('')}
     </div>`;
@@ -804,6 +804,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.unban) return act({ type: 'unban', pid: t.dataset.unban, game: t.dataset.ugame }, 'Liberado.');
   if (t.dataset.paid) return act({ type: 'togglePaid', id: t.dataset.paid });
   if (t.dataset.morador) return act({ type: 'toggleMorador', id: t.dataset.morador });
+  if (t.dataset.cadastrado) return act({ type: 'toggleCadastrado', id: t.dataset.cadastrado });
   if (t.dataset.savecpf) { const id = t.dataset.savecpf; return act({ type: 'setCpf', id, cpf: val('cpf-' + id), fullName: val('fn-' + id) }, 'Salvo.'); }
   if (t.dataset.fixed) return act({ type: 'toggleFixed', id: t.dataset.fixed });
   if (t.dataset.schedrm) return act({ type: 'schedule', schedule: readSched().filter((g, i) => i !== Number(t.dataset.schedrm)) }, 'Dia removido.');
