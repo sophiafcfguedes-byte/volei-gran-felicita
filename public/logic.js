@@ -702,7 +702,7 @@
       const p = spParts(g.meta.startAt);
       const dd = String(p.d).padStart(2, '0') + '/' + String(p.m + 1).padStart(2, '0');
       const lines = [`🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} — ${dd}* (${g.meta.start} às ${g.meta.end})`,
-        `✅ Lista completa: ${d.confirmed.length}/${g.meta.max}`, '',
+        d.confirmed.length >= g.meta.max ? `✅ Lista completa: ${d.confirmed.length}/${g.meta.max}` : `🔒 Lista fechada: ${d.confirmed.length}/${g.meta.max}`, '',
         ...d.fixed.map(id => `⭐ ${nm(id)}`), ...d.regular.map((id, i) => `${i + 1}. ${nm(id)}`)];
       if (d.waitlist.length) lines.push('', '*Lista de espera*', ...d.waitlist.map((id, i) => `${i + 1}. ${nm(id)}`));
       lines.push('', `Quem desistir até as ${g.meta.cutoff} libera a vaga pra espera.`);
@@ -720,7 +720,7 @@
       if (!g.meta.private && left > 0 && !g.frozen && now >= t13 && now < g.meta.cutoffAt) {
         vagas = { key: g.meta.id + ':vagas13d', text: `Faltam ${left} ${left === 1 ? 'vaga' : 'vagas'} a ${left === 1 ? 'ser preenchida' : 'serem preenchidas'} pro vôlei de hoje (${g.meta.start}).` };
       }
-      out.push({ vagas, teams, promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
+      out.push({ vagas, teams, promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max || !!g.frozen, text: lines.join('\n') });
     }
     return { games: out };
   }
