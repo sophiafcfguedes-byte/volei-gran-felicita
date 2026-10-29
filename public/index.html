@@ -544,8 +544,8 @@ function renderTimes() {
   }
   return `<div class="card"><h2>Sorteio dos times</h2>
       <p class="hint">${S.settings.teams || 4} times, equilibrados entre homens e mulheres e pelo nível de cada um. Entram os ${D.confirmed.length} confirmados${D.confirmed.length >= 4 ? ` (${nT} times de ${Math.floor(D.confirmed.length / nT)}${D.confirmed.length % nT ? ' ou ' + Math.ceil(D.confirmed.length / nT) : ''})` : ''}. Às ${S.current ? h(S.current.cutoff) : '17:00'} do dia do jogo, quando a lista fecha, os times são sorteados sozinhos.</p>
-      <button class="btn btn-ball" data-act="draw"${conf.length >= 4 && enabled ? '' : ' disabled'} style="font-size:1.05rem">${ICON.shuffle}Sortear times</button>
-      ${!enabled ? '<p class="hint">Escolha quem você é na aba Lista pra sortear.</p>' : conf.length < 4 ? '<p class="hint">Precisa de pelo menos 4 confirmados.</p>' : ''}
+      ${isAdmin ? `<button class="btn btn-ball" data-act="draw"${conf.length >= 4 ? '' : ' disabled'} style="font-size:1.05rem">${ICON.shuffle}Sortear times</button>
+      ${conf.length < 4 ? '<p class="hint">Precisa de pelo menos 4 confirmados.</p>' : ''}` : ''}
     </div>
     ${teamsHtml}`;
 }
