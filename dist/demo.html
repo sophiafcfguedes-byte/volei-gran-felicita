@@ -294,7 +294,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   const SETTINGS_VERSION = 7;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
@@ -789,6 +789,17 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         return ok;
       }
       case 'unlock': s.settings.manualLockUntil = 0; return ok;
+      case 'punir': {
+        /* Impedido de jogar o próximo jogo (segunda/quinta) por falta. */
+        const p = s.players.find(x => !x.guest && fold(x.name) === fold(a.name));
+        if (!p) return fail('Não achei ninguém com esse nome.');
+        const nx = activeGames(s, now).filter(g => !g.private && g.startAt > now)[0];
+        if (!nx) return fail('Não achei o próximo jogo.');
+        s.bans = (s.bans || []).filter(b => !(b.pid === p.id && b.game === nx.id));
+        s.bans.push({ pid: p.id, game: nx.id, nextDay: nx.day, reason: 'falta', private: false, ts: now });
+        if (s.games[nx.id]) s.games[nx.id].presences = s.games[nx.id].presences.filter(x => x.pid !== p.id);
+        return ok;
+      }
       case 'unban': s.bans = s.bans.filter(b => !(b.pid === a.pid && b.game === a.game)); return ok;
       case 'resetFreq': s.players.forEach(p => { p.freq = 0; }); return ok;
       case 'resetPaid': s.players.forEach(p => { p.paid = false; }); return ok;
@@ -823,6 +834,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         }
         if (!admin && p.id !== a.by && !p.guest) return fail('Cada um só marca o próprio nome.');
         const ban = !admin && (s.bans || []).find(b => b.pid === p.id && b.game === meta.id);
+        if (ban && ban.reason === 'falta') return fail('Você não compareceu da última vez e foi punida, aguarde o próximo dia de jogo.');
         if (ban) return fail(`Você tirou o nome do vôlei de ${DAYS[ban.fromDay].toLowerCase()} depois das ${ban.cutoff}, então está fora deste jogo.`);
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
         if (v.presences.some(x => x.pid === p.id)) return ok;
@@ -874,7 +886,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
           if (isFixedHere(p)) return fail(`${p.name} é da comissão e já tem vaga garantida.`);
           if (v.presences.some(x => x.pid === p.id)) return fail(`${p.name} já está na lista.`);
           const b = (s.bans || []).find(x => x.pid === p.id && x.game === meta.id);
-          if (b && !admin) return fail(`${p.name} está fora deste jogo por ter desistido depois das ${b.cutoff}.`);
+          if (b && !admin) return fail(b.reason === 'falta' ? `${p.name} está impedido(a) neste jogo por falta.` : `${p.name} está fora deste jogo por ter desistido depois das ${b.cutoff}.`);
           v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now, asGuest: true });
           log('add', p.id);
           return ok;
@@ -1296,28 +1308,38 @@ function renderLista() {
   const lk = LG.lockInfo(S, now());
   let lockMsg = '';
   const myBan = me && (S.bans || []).find(b => S.current && b.game === S.current.id && b.pid === me);
-  if (myBan) lockMsg += `<div class="notice">Você tirou o nome do vôlei de ${LG.DAYS[myBan.fromDay].toLowerCase()} (${fmtDM(myBan.from)}) depois das ${h(myBan.cutoff)}, então está fora deste jogo.${isAdmin ? '' : ' Se foi engano, fale com a comissão.'}</div>`;
+  if (myBan && myBan.reason === 'falta') lockMsg += `<div class="notice">Você não compareceu da última vez e foi punida, aguarde o próximo dia de jogo.</div>`;
+  else if (myBan) lockMsg += `<div class="notice">Você tirou o nome do vôlei de ${LG.DAYS[myBan.fromDay].toLowerCase()} (${fmtDM(myBan.from)}) depois das ${h(myBan.cutoff)}, então está fora deste jogo.${isAdmin ? '' : ' Se foi engano, fale com a comissão.'}</div>`;
   if (lk.reason === 'notOpen') lockMsg = `<div class="card opens"><img class="mascot sm" src="${IMG.front}" alt=""><div><b>O check-in abre ${h(opensText(S.current))}</b><div class="hint">${isAdmin ? 'Você é admin e já consegue mexer na lista.' : 'Volte nesse horário. Quem marcar primeiro garante a vaga.'}</div></div></div>`;
   else if (lk.reason === 'closed') lockMsg = `<div class="notice">A lista fechou às ${h(S.current.cutoff)} com os confirmados. A espera não sobe mais: quem sair agora deixa a vaga vazia e fica fora do próximo jogo.</div>`;
   else if (lk.locked && !isAdmin) lockMsg = `<div class="notice">A lista está fechada agora. Só quem é admin consegue mexer.</div>`;
   const prio = false;
+  function impedidos() {
+    const list = (S.bans || []).filter(b => b.reason === 'falta').slice().sort((x, y) => x.game.localeCompare(y.game));
+    return `<div class="card"><h2>Impedidos de jogar o próximo jogo</h2>
+      <p class="hint">Escreva o nome de quem faltou. A pessoa não consegue fazer check-in no próximo jogo (segunda ou quinta).</p>
+      <div class="field"><label for="pun-name">Nome</label><input type="text" id="pun-name" list="pun-list" autocomplete="off" placeholder="Nome da pessoa"><datalist id="pun-list">${S.players.filter(p => !p.guest).map(p => `<option value="${h(p.name)}">`).join('')}</datalist></div>
+      <button class="btn btn-primary" data-act="punir">Impedir no próximo jogo</button>
+      ${list.length ? `<ul class="log" style="margin-top:12px">${list.map(b => `<li><span>${h(P(b.pid) ? P(b.pid).name : '?')} · fora de ${LG.DAYS_SHORT[b.nextDay]} ${fmtDM(b.game)}</span><button class="link" data-unban="${b.pid}" data-ugame="${b.game}">Liberar</button></li>`).join('')}</ul>` : ''}
+    </div>`;
+  }
   function myCheckin() {
     const p = me && P(me);
     if (!p) return '';
     if (fxHere(p)) return '';
     const inList = !!pos[me], isBan = banned.has(me);
     const st = D.regular.includes(me) ? `Você está confirmado: <b>${D.regular.indexOf(me) + 1}º</b> da lista.` : D.waitlist.includes(me) ? `Você está na <b>lista de espera</b> (${D.waitlist.indexOf(me) + 1}º).` : isBan ? 'Você está fora deste jogo.' : 'Você ainda não fez check-in.';
-    const canIn = edit && !inList && !isBan, canOut = inList && (edit || lk.reason === 'closed');
+    const canIn = (edit && !inList) || (isBan && !inList), canOut = inList && (edit || lk.reason === 'closed');
     return `<div class="card"><h2>Seu check-in</h2><p class="hint">${st}</p>
       <div class="ci-btns"><button class="btn ci-in" data-act="checkin"${canIn ? '' : ' disabled'}>Check-in</button><button class="btn ci-out" data-act="desistir"${canOut ? '' : ' disabled'}>Desistir</button></div></div>`;
   }
   const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; const rm = !isAdmin && x.by === me && id !== me && p && (p.guest || x.asGuest) ? `<button class="link" style="color:#940B29" data-unguest="${id}">tirar</button>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} </span>${by || t}${rm}</li>`; };
   return `${demoNote}${renderWho()}${lockMsg}
     <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir até as ${h(S.current ? S.current.cutoff : '17:00')} do dia do jogo, quando a lista fecha. Cada um só marca e desmarca o próprio nome.</p>
-    ${isAdmin ? `<div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
+    ${isAdmin ? impedidos() : ''}${myCheckin()}${false ? `<div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
     ${section('Mulheres', members.filter(p => p.gender === 'F'))}
     ${section('Homens', members.filter(p => p.gender !== 'F'))}
-    ${section('Convidados', guests)}` : myCheckin()}
+    ${section('Convidados', guests)}` : ''}
     ${edit && allowGuests && S.settings.guestLimit ? `<div class="card"><h2>Trazer um convidado</h2>
       <div class="field"><label for="g-name">Nome e sobrenome</label><input type="text" id="g-name" maxlength="40" autocomplete="off" placeholder="Nome e sobrenome"></div>
       <div class="grid2"><div class="field"><label for="g-gender">Gênero</label><select id="g-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
@@ -1510,7 +1532,7 @@ function renderMais() {
 
     <div class="card"><h2>Admin · Suspensões</h2>
       <p class="hint">Quem tirou o nome no dia do jogo depois do horário-limite fica fora do próximo. Toque em <b>Liberar</b> se foi engano.</p>
-      ${(S.bans || []).length ? (S.bans || []).slice().sort((x, y) => x.game.localeCompare(y.game)).map(b => `<div class="role-row">${avatar(P(b.pid))}<span class="nm">${h(nameOf(P(b.pid)))}<br><span class="by">saiu ${LG.DAYS_SHORT[b.fromDay]} ${fmtDM(b.from)} · fora de ${LG.DAYS_SHORT[b.nextDay]} ${fmtDM(b.game)}</span></span><button class="btn btn-ghost btn-sm" data-unban="${b.pid}" data-ugame="${b.game}">Liberar</button></div>`).join('') : '<p class="hint">Ninguém suspenso.</p>'}</div>
+      ${(S.bans || []).length ? (S.bans || []).slice().sort((x, y) => x.game.localeCompare(y.game)).map(b => `<div class="role-row">${avatar(P(b.pid))}<span class="nm">${h(nameOf(P(b.pid)))}<br><span class="by">${b.reason === 'falta' ? 'faltou' : `saiu ${LG.DAYS_SHORT[b.fromDay]} ${fmtDM(b.from)}`} · fora de ${LG.DAYS_SHORT[b.nextDay]} ${fmtDM(b.game)}</span></span><button class="btn btn-ghost btn-sm" data-unban="${b.pid}" data-ugame="${b.game}">Liberar</button></div>`).join('') : '<p class="hint">Ninguém suspenso.</p>'}</div>
 
     <div class="card"><h2>Admin · Fechar a lista</h2>
       <p class="hint">${lk.reason === 'manual' ? `Fechada até ${fmtDay(lk.until)}.` : lk.reason === 'notOpen' ? `O check-in abre ${h(opensText(S.current))}.` : 'O check-in está aberto.'} Use isto só se precisar travar a lista fora do horário normal.</p>
@@ -1631,6 +1653,7 @@ document.addEventListener('click', async e => {
       try { await navigator.clipboard.writeText(txt); toast('Lista copiada.'); } catch (e) { toast('Não consegui copiar. Tente pelo computador.', true); }
       return;
     }
+    case 'punir': return act({ type: 'punir', name: val('pun-name') }, 'Pronto: impedido no próximo jogo.', ['pun-name']);
     case 'checkin': return setIn(me, true);
     case 'desistir': return setIn(me, false);
     case 'acesso-now': return act({ type: 'acessoNow', game: S.current && S.current.id }, 'Pedido enviado: em até 1 minuto libera no Vida de Síndico.');

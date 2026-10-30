@@ -11,7 +11,7 @@
   const SETTINGS_VERSION = 7;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
@@ -506,6 +506,17 @@
         return ok;
       }
       case 'unlock': s.settings.manualLockUntil = 0; return ok;
+      case 'punir': {
+        /* Impedido de jogar o próximo jogo (segunda/quinta) por falta. */
+        const p = s.players.find(x => !x.guest && fold(x.name) === fold(a.name));
+        if (!p) return fail('Não achei ninguém com esse nome.');
+        const nx = activeGames(s, now).filter(g => !g.private && g.startAt > now)[0];
+        if (!nx) return fail('Não achei o próximo jogo.');
+        s.bans = (s.bans || []).filter(b => !(b.pid === p.id && b.game === nx.id));
+        s.bans.push({ pid: p.id, game: nx.id, nextDay: nx.day, reason: 'falta', private: false, ts: now });
+        if (s.games[nx.id]) s.games[nx.id].presences = s.games[nx.id].presences.filter(x => x.pid !== p.id);
+        return ok;
+      }
       case 'unban': s.bans = s.bans.filter(b => !(b.pid === a.pid && b.game === a.game)); return ok;
       case 'resetFreq': s.players.forEach(p => { p.freq = 0; }); return ok;
       case 'resetPaid': s.players.forEach(p => { p.paid = false; }); return ok;
@@ -540,6 +551,7 @@
         }
         if (!admin && p.id !== a.by && !p.guest) return fail('Cada um só marca o próprio nome.');
         const ban = !admin && (s.bans || []).find(b => b.pid === p.id && b.game === meta.id);
+        if (ban && ban.reason === 'falta') return fail('Você não compareceu da última vez e foi punida, aguarde o próximo dia de jogo.');
         if (ban) return fail(`Você tirou o nome do vôlei de ${DAYS[ban.fromDay].toLowerCase()} depois das ${ban.cutoff}, então está fora deste jogo.`);
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
         if (v.presences.some(x => x.pid === p.id)) return ok;
@@ -591,7 +603,7 @@
           if (isFixedHere(p)) return fail(`${p.name} é da comissão e já tem vaga garantida.`);
           if (v.presences.some(x => x.pid === p.id)) return fail(`${p.name} já está na lista.`);
           const b = (s.bans || []).find(x => x.pid === p.id && x.game === meta.id);
-          if (b && !admin) return fail(`${p.name} está fora deste jogo por ter desistido depois das ${b.cutoff}.`);
+          if (b && !admin) return fail(b.reason === 'falta' ? `${p.name} está impedido(a) neste jogo por falta.` : `${p.name} está fora deste jogo por ter desistido depois das ${b.cutoff}.`);
           v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now, asGuest: true });
           log('add', p.id);
           return ok;
