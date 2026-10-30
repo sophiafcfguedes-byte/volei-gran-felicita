@@ -565,6 +565,7 @@
       }
       case 'leave': {
         const p = pm[a.pid];
+        if (!admin && lk.reason === 'closed') return fail(`A lista já fechou às ${meta.cutoff}. Não dá mais pra desistir pelo app; fale com a comissão.`);
         if (p && isFixedHere(p)) {
           if (!admin && a.pid !== a.by) return fail('Só a própria pessoa ou um admin mexe na vaga da comissão.');
           if (!v.out.includes(p.id)) v.out.push(p.id);
