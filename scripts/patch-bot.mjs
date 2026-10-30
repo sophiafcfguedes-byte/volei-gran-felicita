@@ -75,6 +75,7 @@ async function avisosTick() {
       let text = '@all ' + g.vagas.text;
       if (AVISOS.publicUrl) text += '\\n' + AVISOS.publicUrl;
       await sock.sendMessage(groupId, { text, mentionAll: true, contextInfo: { nonJidMentions: 1 } });
+      try { await sock.sendPresenceUpdate('unavailable'); } catch (e) {}
       log('Aviso de vagas enviado (' + g.id + ').');
     } catch (e) { logErr('Não consegui mandar o aviso de vagas:', e.message); }
   }
@@ -83,7 +84,7 @@ async function avisosTick() {
     const groupId = rt[g.group]?.groupId;
     if (!groupId || !g.teams || state.avisos[g.teams.key]) continue;
     state.avisos[g.teams.key] = Date.now(); saveState();
-    try { await sock.sendMessage(groupId, { text: g.teams.text }); log('Times enviados (' + g.id + ').'); }
+    try { await sock.sendMessage(groupId, { text: g.teams.text }); try { await sock.sendPresenceUpdate('unavailable'); } catch (e) {} log('Times enviados (' + g.id + ').'); }
     catch (e) { logErr('Não consegui mandar os times:', e.message); }
   }
   for (const k of Object.keys(state.avisos)) if (Date.now() - state.avisos[k] > 10 * 864e5) { delete state.avisos[k]; delete state.avisoMsgs[k]; }
@@ -92,7 +93,14 @@ setInterval(() => avisosTick().catch((e) => logErr('avisos:', e.message)), 30_00
 // ---------- avisos do app (fim) ----------`;
 
 // Enquetes removidas de vez: startRound não faz nada e o log não anuncia envio automático.
+// Robô "offline": sem isso o WhatsApp acha que você está usando o computador e para de notificar o celular.
+function presenceOff() {
+  const m = "      myJid = normJid(sock.user?.id);";
+  const add = "\n      try { await sock.sendPresenceUpdate('unavailable'); } catch (e) {}";
+  if (s.includes(m) && !s.includes(m + add)) s = s.replace(m, () => m + add);
+}
 function killPolls() {
+  presenceOff();
   const head = "async function startRound(round, { test = false, reason = 'agendado' } = {}) {";
   const guard = "\n  if (!POLLS_ENABLED) { log('Enquetes desligadas: a lista é pelo app.'); return; }";
   if (s.includes(head) && !s.includes(head + guard)) s = s.replace(head, () => head + guard);
