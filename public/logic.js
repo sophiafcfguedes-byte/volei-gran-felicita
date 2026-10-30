@@ -691,7 +691,8 @@
         const hit = evs.filter(e => e.start < b && e.end > a).sort((x, y) => x.blocked - y.blocked)[0];
         return { start: a, end: b, who: hit ? hit.who : null, blocked: !!(hit && hit.blocked), pending: !!(hit && hit.pending) };
       });
-      days.push({ date: spTs(q.y, q.m, q.d, '00:00'), wd: q.wd, slots });
+      const left = slots.filter(x => x.end > now); /* horário que já passou some da tela */
+      if (left.length) days.push({ date: spTs(q.y, q.m, q.d, '00:00'), wd: q.wd, slots: left });
     }
     return { ts: r.ts || null, ok: r.ok !== false, days };
   }
