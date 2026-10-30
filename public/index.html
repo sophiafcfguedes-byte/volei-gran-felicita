@@ -668,8 +668,7 @@ function renderMais() {
       <li><b>Às ${h((sched[0] || {}).cutoff || '17:00')} do dia do jogo a lista fecha</b> com os confirmados. Até lá, se alguém sair, o primeiro da espera sobe sozinho; depois disso, ninguém mais entra.</li>
       <li><b>Desistência:</b> quem estava confirmado e tirar o nome depois que a lista fechou deixa a vaga vazia e fica fora do próximo jogo. Segunda e quinta contam juntas (saiu da segunda, perde a quinta; saiu da quinta, perde a segunda)${sched.some(g => g.private) ? '; a quarta conta separado (perde a quarta seguinte)' : ''}. Quem está na lista de espera pode sair sem problema.</li>
       <li>Acabaram as vagas, entra na lista de espera, que sobe sozinha quando alguém desiste.</li>
-      <li>Cada pessoa só marca e desmarca o próprio nome.${st.guestLimit ? ` Nos jogos que aceitam convidados, cada um pode trazer até ${st.guestLimit}, e só quem trouxe pode tirar.` : ''}</li>
-      <li>Quando o jogo acaba, a lista zera sozinha e já mostra o próximo jogo. Quem estava confirmado ganha +1 na frequência${sched.some(g => g.private) ? ' (só segunda e quinta contam)' : ''}.</li>
+      ${st.guestLimit ? `<li>Nos jogos que aceitam convidados, cada um pode trazer até ${st.guestLimit}, e só quem trouxe pode tirar.</li>` : ''}
       <li>O sorteio monta ${st.teams || 4} times equilibrando homens, mulheres, idade e nível. O nível e a faixa etária de cada um só o admin vê.</li>
     </ul></details></div>`;
 
