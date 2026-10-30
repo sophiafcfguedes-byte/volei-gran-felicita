@@ -535,7 +535,8 @@ function renderLista() {
     if (fxHere(p)) return '';
     const inList = !!pos[me], isBan = banned.has(me);
     const st = D.regular.includes(me) ? `Você está confirmado: <b>${D.regular.indexOf(me) + 1}º</b> da lista.` : D.waitlist.includes(me) ? `Você está na <b>lista de espera</b> (${D.waitlist.indexOf(me) + 1}º).` : isBan ? 'Você está fora deste jogo.' : 'Você ainda não fez check-in.';
-    const canIn = (edit && !inList) || (isBan && !inList), canOut = inList && (edit || lk.reason === 'closed');
+    const open = !lk.locked; /* só fica clicável quando o check-in está aberto (vale pra admin também) */
+    const canIn = open && !inList, canOut = inList && (open || lk.reason === 'closed');
     return `<div class="card"><h2>Seu check-in</h2><p class="hint">${st}</p>
       <div class="ci-btns"><button class="btn ci-in" data-act="checkin"${canIn ? '' : ' disabled'}>Check-in</button><button class="btn ci-out" data-act="desistir"${canOut ? '' : ' disabled'}>Desistir</button></div></div>`;
   }
