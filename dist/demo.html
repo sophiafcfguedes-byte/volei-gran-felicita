@@ -237,6 +237,10 @@ details summary { cursor: pointer; font-weight: 700; }
   padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
 .tabs-in { max-width: 560px; margin: 0 auto; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; }
 #tabs button[hidden] { display: none; }
+.ci-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
+.ci-btns .btn { min-height: 56px; font-size: 1.1rem; font-weight: 800; color: #fff; border: 0; }
+.ci-in { background: #1f9d55; } .ci-out { background: #c62828; }
+.ci-btns .btn[disabled] { opacity: .35; }
 .ac-st { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
 .ac-ok { background: rgba(0,128,64,.14); color: #0a7a3e; } .ac-warn { background: rgba(210,169,90,.25); color: #7a5a12; } .ac-err { background: rgba(148,11,41,.14); color: #940B29; } .ac-mor { background: rgba(21,101,192,.14); color: #1565C0; } .ac-cad { background: rgba(240,190,30,.28); color: #7a5a00; }
 .res-day { margin: 14px 0 6px; font-weight: 800; font-size: 14px; color: var(--muted, #6F6F6F); text-transform: capitalize; }
@@ -1247,6 +1251,17 @@ function renderHeader() {
     <div class="tally"><span class="count">${D.confirmed.length}<small>/${st.max}</small></span><br><span class="count-label">confirmados${D.fixed.length ? ` · ${D.fixed.length} da comissão` : ''}${D.waitlist.length ? ` · ${D.waitlist.length} na espera` : ''}</span></div>`;
 }
 
+/* Marca (on=true) ou tira (on=false) alguém da lista; avisa da suspensão se a lista já fechou. */
+function setIn(pid, on) {
+  const g = S.current;
+  if (!on && pid === me && !isAdmin && g && now() >= g.cutoffAt && now() < g.endAt && D.regular.includes(pid)) {
+    const nx = LG.nextInSeries(RAW, g);
+    return openConfirm(`A lista já fechou (${g.cutoff}). Se você desistir agora, a vaga fica vazia e você fica fora do ${nx ? `vôlei de ${LG.DAYS[nx.day].toLowerCase()} (${fmtDM(nx.id)})` : 'próximo jogo'}.`, 'Desistir mesmo assim', () => act({ type: 'leave', pid }));
+  }
+  if (!on && pid === me) return openConfirm('Quer mesmo desistir deste jogo?', 'Desistir', () => act({ type: 'leave', pid }, 'Você saiu da lista.'));
+  return act({ type: on ? 'join' : 'leave', pid }, on ? 'Check-in feito!' : 'Removido da lista.');
+}
+
 function renderWho() {
   const p = me && P(me);
   if (!p) return `<div class="card who"><div class="grow"><b>Quem é você?</b><div class="hint">Escolha seu nome pra fazer check-in.</div></div><button class="btn btn-primary" data-act="whoami">Escolher</button></div>`;
@@ -1286,13 +1301,23 @@ function renderLista() {
   else if (lk.reason === 'closed') lockMsg = `<div class="notice">A lista fechou às ${h(S.current.cutoff)} com os confirmados. A espera não sobe mais: quem sair agora deixa a vaga vazia e fica fora do próximo jogo.</div>`;
   else if (lk.locked && !isAdmin) lockMsg = `<div class="notice">A lista está fechada agora. Só quem é admin consegue mexer.</div>`;
   const prio = false;
-  const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} </span>${by || t}</li>`; };
+  function myCheckin() {
+    const p = me && P(me);
+    if (!p) return '';
+    if (fxHere(p)) return '';
+    const inList = !!pos[me], isBan = banned.has(me);
+    const st = D.regular.includes(me) ? `Você está confirmado: <b>${D.regular.indexOf(me) + 1}º</b> da lista.` : D.waitlist.includes(me) ? `Você está na <b>lista de espera</b> (${D.waitlist.indexOf(me) + 1}º).` : isBan ? 'Você está fora deste jogo.' : 'Você ainda não fez check-in.';
+    const canIn = edit && !inList && !isBan, canOut = inList && (edit || lk.reason === 'closed');
+    return `<div class="card"><h2>Seu check-in</h2><p class="hint">${st}</p>
+      <div class="ci-btns"><button class="btn ci-in" data-act="checkin"${canIn ? '' : ' disabled'}>Check-in</button><button class="btn ci-out" data-act="desistir"${canOut ? '' : ' disabled'}>Desistir</button></div></div>`;
+  }
+  const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; const rm = !isAdmin && x.by === me && id !== me && p && (p.guest || x.asGuest) ? `<button class="link" style="color:#940B29" data-unguest="${id}">tirar</button>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} </span>${by || t}${rm}</li>`; };
   return `${demoNote}${renderWho()}${lockMsg}
     <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir até as ${h(S.current ? S.current.cutoff : '17:00')} do dia do jogo, quando a lista fecha. Cada um só marca e desmarca o próprio nome.</p>
-    <div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
+    ${isAdmin ? `<div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
     ${section('Mulheres', members.filter(p => p.gender === 'F'))}
     ${section('Homens', members.filter(p => p.gender !== 'F'))}
-    ${section('Convidados', guests)}
+    ${section('Convidados', guests)}` : myCheckin()}
     ${edit && allowGuests && S.settings.guestLimit ? `<div class="card"><h2>Trazer um convidado</h2>
       <div class="field"><label for="g-name">Nome e sobrenome</label><input type="text" id="g-name" maxlength="40" autocomplete="off" placeholder="Nome e sobrenome"></div>
       <div class="grid2"><div class="field"><label for="g-gender">Gênero</label><select id="g-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
@@ -1589,6 +1614,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.newpin) return act({ type: 'setPin', id: t.dataset.newpin, pin: 'random' }, 'Senha nova criada.');
   if (t.dataset.unban) return act({ type: 'unban', pid: t.dataset.unban, game: t.dataset.ugame }, 'Liberado.');
   if (t.dataset.paid) return act({ type: 'togglePaid', id: t.dataset.paid });
+  if (t.dataset.unguest) return act({ type: 'leave', pid: t.dataset.unguest }, 'Convidado removido.');
   if (t.dataset.morador) return act({ type: 'toggleMorador', id: t.dataset.morador });
   if (t.dataset.cadastrado) return act({ type: 'toggleCadastrado', id: t.dataset.cadastrado });
   if (t.dataset.savecpf) { const id = t.dataset.savecpf; return act({ type: 'setCpf', id, cpf: val('cpf-' + id), fullName: val('fn-' + id) }, 'Salvo.'); }
@@ -1605,6 +1631,8 @@ document.addEventListener('click', async e => {
       try { await navigator.clipboard.writeText(txt); toast('Lista copiada.'); } catch (e) { toast('Não consegui copiar. Tente pelo computador.', true); }
       return;
     }
+    case 'checkin': return setIn(me, true);
+    case 'desistir': return setIn(me, false);
     case 'acesso-now': return act({ type: 'acessoNow', game: S.current && S.current.id }, 'Pedido enviado: em até 1 minuto libera no Vida de Síndico.');
     case 'save-cpf': return act({ type: 'setCpf', id: me, cpf: val('my-cpf'), fullName: val('my-full') }, 'Dados salvos.');
     case 'save-phone': return act({ type: 'setPhone', id: me, phone: val('my-phone') }, 'Celular salvo.');
@@ -1641,15 +1669,7 @@ document.addEventListener('click', async e => {
 
 document.addEventListener('change', e => {
   const t = e.target;
-  if (t.dataset.toggle) {
-    const pid = t.dataset.toggle, g = S.current;
-    if (!t.checked && pid === me && !isAdmin && g && now() >= g.cutoffAt && now() < g.endAt && D.regular.includes(pid)) {
-      t.checked = true;
-      const nx = LG.nextInSeries(RAW, g);
-      return openConfirm(`A lista já fechou (${g.cutoff}). Se você tirar seu nome agora, a vaga fica vazia e você fica fora do ${nx ? `vôlei de ${LG.DAYS[nx.day].toLowerCase()} (${fmtDM(nx.id)})` : 'próximo jogo'}.`, 'Tirar mesmo assim', () => act({ type: 'leave', pid }));
-    }
-    return act({ type: t.checked ? 'join' : 'leave', pid });
-  }
+  if (t.dataset.toggle) { const on = t.checked; t.checked = !on; return setIn(t.dataset.toggle, on); }
   if (t.dataset.phone) return act({ type: 'setPhone', id: t.dataset.phone, phone: t.value }, 'Celular salvo.');
   if (t.dataset.edit) { const q = P(t.dataset.edit); if (!q) return; return act(Object.assign({ type: 'savePlayer' }, q, { [t.dataset.field]: t.value }), 'Salvo.'); }
   if (t.id === 'photo-in' && t.files && t.files[0]) return uploadPhoto(t.files[0]);
