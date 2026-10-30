@@ -237,6 +237,8 @@ details summary { cursor: pointer; font-weight: 700; }
   padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
 .tabs-in { max-width: 560px; margin: 0 auto; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; }
 #tabs button[hidden] { display: none; }
+.pun-sug { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pun-sug button { border: 1px solid rgba(127,127,127,.35); background: transparent; color: inherit; border-radius: 99px; padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; }
 .ci-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
 .ci-btns .btn { min-height: 56px; font-size: 1.1rem; font-weight: 800; color: #fff; border: 0; }
 .ci-in { background: #1f9d55; } .ci-out { background: #c62828; }
@@ -522,7 +524,7 @@ function renderLista() {
     const list = (S.bans || []).filter(b => b.reason === 'falta').slice().sort((x, y) => x.game.localeCompare(y.game));
     return `<div class="card"><h2>Impedidos de jogar o próximo jogo</h2>
       <p class="hint">Escreva o nome de quem faltou. A pessoa não consegue fazer check-in no próximo jogo (segunda ou quinta).</p>
-      <div class="field"><label for="pun-name">Nome</label><input type="text" id="pun-name" list="pun-list" autocomplete="off" placeholder="Nome da pessoa"><datalist id="pun-list">${S.players.filter(p => !p.guest).map(p => `<option value="${h(p.name)}">`).join('')}</datalist></div>
+      <div class="field"><label for="pun-name">Nome</label><input type="text" id="pun-name" autocomplete="off" placeholder="Nome da pessoa"><div id="pun-sug" class="pun-sug"></div></div>
       <button class="btn btn-primary" data-act="punir">Impedir no próximo jogo</button>
       ${list.length ? `<ul class="log" style="margin-top:12px">${list.map(b => `<li><span>${h(P(b.pid) ? P(b.pid).name : '?')} · fora de ${LG.DAYS_SHORT[b.nextDay]} ${fmtDM(b.game)}</span><button class="link" data-unban="${b.pid}" data-ugame="${b.game}">Liberar</button></li>`).join('')}</ul>` : ''}
     </div>`;
@@ -840,6 +842,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.newpin) return act({ type: 'setPin', id: t.dataset.newpin, pin: 'random' }, 'Senha nova criada.');
   if (t.dataset.unban) return act({ type: 'unban', pid: t.dataset.unban, game: t.dataset.ugame }, 'Liberado.');
   if (t.dataset.paid) return act({ type: 'togglePaid', id: t.dataset.paid });
+  if (t.dataset.pick) { const i = document.getElementById('pun-name'); i.value = t.dataset.pick; document.getElementById('pun-sug').innerHTML = ''; return; }
   if (t.dataset.unguest) return act({ type: 'leave', pid: t.dataset.unguest }, 'Convidado removido.');
   if (t.dataset.morador) return act({ type: 'toggleMorador', id: t.dataset.morador });
   if (t.dataset.cadastrado) return act({ type: 'toggleCadastrado', id: t.dataset.cadastrado });
@@ -904,6 +907,11 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   if (e.target.id === 'who-q') filterWho(e.target.value);
   if (e.target.id === 'list-q') filterList();
+  if (e.target.id === 'pun-name') {
+    const q = norm(e.target.value), box = document.getElementById('pun-sug');
+    const hits = q ? S.players.filter(p => !p.guest && norm(p.name).includes(q)).sort(byName).slice(0, 6) : [];
+    box.innerHTML = hits.map(p => `<button type="button" data-pick="${h(p.name)}">${h(p.name)}</button>`).join('');
+  }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
 
