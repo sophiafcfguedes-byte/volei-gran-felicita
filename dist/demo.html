@@ -1281,7 +1281,7 @@ function renderWho() {
   if (!p) return `<div class="card who"><div class="grow"><b>Quem é você?</b><div class="hint">Escolha seu nome pra fazer check-in.</div></div><button class="btn btn-primary" data-act="whoami">Escolher</button></div>`;
   const mine = S.presences.filter(x => x.by === me && x.pid !== me && P(x.pid) && (P(x.pid).guest || x.asGuest)).length, lim = S.settings.guestLimit;
   const allowG = !S.current || S.current.guests !== false;
-  const sub = p.fixed && S.current && S.current.fixed ? 'Você tem vaga garantida da comissão' : allowG && lim ? `Você só marca o seu nome · trouxe ${mine} de ${lim} convidado${lim > 1 ? 's' : ''}` : 'Você só marca e desmarca o seu nome';
+  const sub = p.fixed && S.current && S.current.fixed ? 'Você tem vaga garantida da comissão' : allowG && lim ? `Você trouxe ${mine} de ${lim} convidado${lim > 1 ? 's' : ''}` : '';
   return `<div class="card who">${avatar(p)}<div class="grow"><b>${h(p.name)}</b><div class="hint">${sub}</div></div><button class="link" data-act="whoami">Trocar</button></div>`;
 }
 
@@ -1337,7 +1337,7 @@ function renderLista() {
   }
   const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; const rm = !isAdmin && x.by === me && id !== me && p && (p.guest || x.asGuest) ? `<button class="link" style="color:#940B29" data-unguest="${id}">tirar</button>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} </span>${by || t}${rm}</li>`; };
   return `${demoNote}${renderWho()}${lockMsg}
-    <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir até as ${h(S.current ? S.current.cutoff : '17:00')} do dia do jogo, quando a lista fecha. Cada um só marca e desmarca o próprio nome.</p>
+    <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir até as ${h(S.current ? S.current.cutoff : '17:00')} do dia do jogo, quando a lista fecha.</p>
     ${isAdmin ? impedidos() : ''}${myCheckin()}${false ? `<div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
     ${section('Mulheres', members.filter(p => p.gender === 'F'))}
     ${section('Homens', members.filter(p => p.gender !== 'F'))}
