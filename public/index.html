@@ -558,7 +558,7 @@ function renderLista() {
       ${D.waitlist.length ? `<h3 style="font-size:1rem;color:var(--warn)">${D.frozen ? 'Lista de espera (não entra mais)' : 'Lista de espera'}</h3><ol class="conf wait">${D.waitlist.map(li).join('')}</ol>` : ''}
       <a class="btn btn-wa" href="${h(waLink(listText()))}" target="_blank" rel="noopener">${ICON.wa}Mandar lista no WhatsApp</a>
     </div>
-    ${S.log.length ? `<div class="card"><h2>O que aconteceu</h2><ul class="log">${S.log.slice(0, 20).map(l => {
+    ${false && S.log.length ? `<div class="card"><h2>O que aconteceu</h2><ul class="log">${S.log.slice(0, 20).map(l => {
       const who = l.by && P(l.by) ? h(P(l.by).name) : l.byName ? h(l.byName) : 'Admin';
       const nm = P(l.pid) ? nameOf(P(l.pid)) : (l.name || '—');
       const what = l.act === 'add' ? `<span class="add">marcou</span> ${h(nm)}` : l.act === 'remove' ? `<span class="rem">tirou</span> ${h(nm)}` : 'sorteou os times';
