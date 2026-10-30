@@ -585,7 +585,7 @@ function renderTimes() {
       <a class="btn btn-wa" href="${h(waLink(teamsText()))}" target="_blank" rel="noopener">${ICON.wa}Mandar times no WhatsApp</a>`;
   }
   return `<div class="card"><h2>Sorteio dos times</h2>
-      <p class="hint">${S.settings.teams || 4} times, equilibrados entre homens e mulheres e pelo nível de cada um. Entram os ${D.confirmed.length} confirmados${D.confirmed.length >= 4 ? (S.current && !S.current.private ? ' (times de 6; o último fica com quem sobrar)' : ` (${nT} times de ${Math.floor(D.confirmed.length / nT)}${D.confirmed.length % nT ? ' ou ' + Math.ceil(D.confirmed.length / nT) : ''})`) : ''}. Às ${S.current ? h(S.current.cutoff) : '17:00'} do dia do jogo, quando a lista fecha, os times são sorteados sozinhos.</p>
+      <p class="hint">${S.settings.teams || 4} times, equilibrados entre homens e mulheres e pelo nível de cada um. Às ${S.current ? h(S.current.cutoff) : '17:00'} do dia do jogo, quando a lista fecha, os times são sorteados sozinhos.</p>
       ${isAdmin ? `<button class="btn btn-ball" data-act="draw"${conf.length >= 4 ? '' : ' disabled'} style="font-size:1.05rem">${ICON.shuffle}Sortear times</button>
       ${conf.length < 4 ? '<p class="hint">Precisa de pelo menos 4 confirmados.</p>' : ''}` : ''}
     </div>
@@ -601,7 +601,7 @@ function renderReservas() {
   const hm = ts => { const d = new Date(ts - 3 * 3600e3); return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); };
   const upd = A.ts ? (() => { const q = spDate(A.ts); return `Atualizado ${q.d}/${q.m + 1} às ${hm(A.ts)}`; })() : '';
   return `<div class="card"><h2>Reservas da quadra</h2>
-    <p class="hint">Próximos 30 dias, das 19h às 21h. Direto do Vida de Síndico. ${h(upd)}${A.ok ? '' : ' · não consegui atualizar agora'}</p>
+    <p class="hint">Reservas serão exibidas pelos próximos 30 dias, das 19h às 21h, direto do app Vida de Síndico. ${h(upd)}${A.ok ? '' : ' · não consegui atualizar agora'}</p>
     ${(A.days || []).map(d => { const q = spDate(d.date + 12 * 3600e3); return `<div class="res-day">${LG.DAYS[d.wd]}, ${q.d}/${q.m + 1}${d.wd === 3 ? ' ' + ICON.ball : ''}</div>${d.slots.map(e => `<div class="res-row${e.blocked ? ' blk' : ''}"><span class="hr">${hm(e.start)} – ${hm(e.end)}</span><span class="nm">${e.who ? h(e.who) : '<span class="by">Sem reserva</span>'}</span>${e.pending ? '<span class="tag">pendente</span>' : ''}</div>`).join('')}`; }).join('')}
   </div>`;
 }
