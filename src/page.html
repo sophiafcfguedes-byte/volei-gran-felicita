@@ -740,11 +740,6 @@ function renderMais() {
       <p class="hint">Quem tirou o nome no dia do jogo depois do horário-limite fica fora do próximo. Toque em <b>Liberar</b> se foi engano.</p>
       ${(S.bans || []).length ? (S.bans || []).slice().sort((x, y) => x.game.localeCompare(y.game)).map(b => `<div class="role-row">${avatar(P(b.pid))}<span class="nm">${h(nameOf(P(b.pid)))}<br><span class="by">${b.reason === 'falta' ? 'faltou' : `saiu ${LG.DAYS_SHORT[b.fromDay]} ${fmtDM(b.from)}`} · fora de ${LG.DAYS_SHORT[b.nextDay]} ${fmtDM(b.game)}</span></span><button class="btn btn-ghost btn-sm" data-unban="${b.pid}" data-ugame="${b.game}">Liberar</button></div>`).join('') : '<p class="hint">Ninguém suspenso.</p>'}</div>
 
-    <div class="card"><h2>Admin · Fechar a lista</h2>
-      <p class="hint">${lk.reason === 'manual' ? `Fechada até ${fmtDay(lk.until)}.` : lk.reason === 'notOpen' ? `O check-in abre ${h(opensText(S.current))}.` : 'O check-in está aberto.'} Use isto só se precisar travar a lista fora do horário normal.</p>
-      <div class="grid2"><div class="field"><label for="lk-min">Fechar por (minutos)</label><input type="number" id="lk-min" min="1" value="60"></div>
-        <div class="btns" style="align-items:end"><button class="btn btn-ghost" data-act="lock">Fechar</button><button class="btn btn-ghost" data-act="unlock"${st.manualLockUntil > now() ? '' : ' disabled'}>Reabrir</button></div></div></div>
-
     <div class="card"><h2>Admin · Sugestões recebidas</h2>
       ${S.suggestions.length ? S.suggestions.map(x => `<div class="sug"><div>${h(x.text)}</div><div class="by">${x.by && P(x.by) ? h(P(x.by).name) : 'Anônima'} · ${fmtDay(x.ts)} · <button class="link" data-sugdel="${x.id}">apagar</button></div></div>`).join('') : '<p class="hint">Nenhuma sugestão por enquanto.</p>'}</div>`;
   return html;
