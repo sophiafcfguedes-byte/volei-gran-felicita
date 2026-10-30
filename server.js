@@ -99,9 +99,19 @@ async function syncAcessos() {
 }
 setInterval(() => syncAcessos().catch(e => console.error('acessos:', e.message)), 60000);
 
-const SECRET = 'gf-auth:' + ADMIN_PASSWORD;
-const adminToken = ADMIN_PASSWORD ? crypto.createHash('sha256').update('volei:' + ADMIN_PASSWORD).digest('hex') : null;
-const isAdmin = req => !!adminToken && req.headers['x-admin-token'] === adminToken;
+/* Segredo das sessões dos jogadores: fica fixo num arquivo (trocar a senha de admin não desloga ninguém). */
+const os = require('os');
+const SECRET_FILE = path.join(os.homedir(), '.volei-secret');
+let SECRET;
+try { SECRET = fs.readFileSync(SECRET_FILE, 'utf8').trim(); } catch (e) { SECRET = 'gf-auth:' + ADMIN_PASSWORD; try { fs.writeFileSync(SECRET_FILE, SECRET, { mode: 0o600 }); } catch (e2) {} }
+/* Senhas de admin: ~/.volei-admins (uma por linha); se não existir, usa ADMIN_PASSWORD. Lido a cada pedido. */
+const ADMINS_FILE = path.join(os.homedir(), '.volei-admins');
+const hashPw = pw => crypto.createHash('sha256').update('volei:' + pw).digest('hex');
+function adminPasswords() {
+  try { const l = fs.readFileSync(ADMINS_FILE, 'utf8').split(/\r?\n/).map(x => x.trim()).filter(Boolean); if (l.length) return l; } catch (e) {}
+  return ADMIN_PASSWORD ? [ADMIN_PASSWORD] : [];
+}
+const isAdmin = req => { const t = req.headers['x-admin-token']; return !!t && adminPasswords().some(pw => hashPw(pw) === t); };
 
 function send(res, code, body, type) {
   res.writeHead(code, { 'Content-Type': type || 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -131,7 +141,7 @@ http.createServer(async (req, res) => {
     if (url.pathname === '/api/action' && req.method === 'POST') {
       const a = await readBody(req);
       if (a.type === 'login') {
-        if (adminToken && a.password === ADMIN_PASSWORD) return send(res, 200, { ok: true, token: adminToken });
+        if (a.password && adminPasswords().includes(a.password)) return send(res, 200, { ok: true, token: hashPw(a.password) });
         await new Promise(r => setTimeout(r, 800));
         return send(res, 200, { ok: false, error: 'Senha incorreta.' });
       }
