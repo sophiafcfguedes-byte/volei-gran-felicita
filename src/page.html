@@ -745,11 +745,6 @@ function renderMais() {
       <div class="grid2"><div class="field"><label for="lk-min">Fechar por (minutos)</label><input type="number" id="lk-min" min="1" value="60"></div>
         <div class="btns" style="align-items:end"><button class="btn btn-ghost" data-act="lock">Fechar</button><button class="btn btn-ghost" data-act="unlock"${st.manualLockUntil > now() ? '' : ' disabled'}>Reabrir</button></div></div></div>
 
-    <div class="card"><h2>Admin · Fim de jogo</h2>
-      <p class="hint">O jogo encerra sozinho no horário de fim${S.current ? ` (${S.current.end})` : ''}. Use o botão só se quiser encerrar antes: ele soma 1 na frequência de quem estava confirmado e limpa a lista.</p>
-      <button class="btn btn-danger" data-act="resetPresences" data-confirm>Encerrar agora e limpar lista</button>
-      <div class="btns"><button class="btn btn-danger" data-act="resetFreq" data-confirm>Zerar frequência</button></div></div>
-
     <div class="card"><h2>Admin · Sugestões recebidas</h2>
       ${S.suggestions.length ? S.suggestions.map(x => `<div class="sug"><div>${h(x.text)}</div><div class="by">${x.by && P(x.by) ? h(P(x.by).name) : 'Anônima'} · ${fmtDay(x.ts)} · <button class="link" data-sugdel="${x.id}">apagar</button></div></div>`).join('') : '<p class="hint">Nenhuma sugestão por enquanto.</p>'}</div>`;
   return html;
