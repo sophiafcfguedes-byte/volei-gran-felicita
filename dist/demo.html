@@ -1327,10 +1327,10 @@ function renderLista() {
   }
   function myCheckin() {
     const p = me && P(me);
-    if (!p) return '';
-    if (fxHere(p)) return '';
+    if (!p) return `<div class="card"><h2>Seu check-in</h2><p class="hint">Escolha seu nome lá em cima pra fazer check-in.</p>
+      <div class="ci-btns"><button class="btn ci-in" data-act="whoami">Check-in</button><button class="btn ci-out" disabled>Desistir</button></div></div>`;
     const inList = !!pos[me], isBan = banned.has(me);
-    const st = D.regular.includes(me) ? `Você está confirmado: <b>${D.regular.indexOf(me) + 1}º</b> da lista.` : D.waitlist.includes(me) ? `Você está na <b>lista de espera</b> (${D.waitlist.indexOf(me) + 1}º).` : isBan ? 'Você está fora deste jogo.' : 'Você ainda não fez check-in.';
+    const st = fxHere(p) && inList ? 'Você tem <b>vaga garantida</b> (comissão).' : D.regular.includes(me) ? `Você está confirmado: <b>${D.regular.indexOf(me) + 1}º</b> da lista.` : D.waitlist.includes(me) ? `Você está na <b>lista de espera</b> (${D.waitlist.indexOf(me) + 1}º).` : isBan ? 'Você está fora deste jogo.' : 'Você ainda não fez check-in.';
     const open = !lk.locked; /* só fica clicável quando o check-in está aberto (vale pra admin também) */
     const canIn = open && !inList, canOut = inList && (open || lk.reason === 'closed');
     return `<div class="card"><h2>Seu check-in</h2><p class="hint">${st}</p>
@@ -1444,8 +1444,8 @@ function renderMais() {
   if (p) html += `<div class="card"><h2>Sua foto</h2><div class="who">${avatar(p, true)}<div class="grow btns">
       <label class="btn btn-ghost btn-sm" for="photo-in">Escolher foto</label><input type="file" id="photo-in" accept="image/*" hidden>
       ${p.photo ? '<button class="btn btn-ghost btn-sm" data-act="photo-del">Tirar foto</button>' : ''}</div></div></div>`;
-  if (p) html += `<div class="card"><h2>Entrada no condomínio</h2>
-      ${p.morador ? '<p class="hint">Você está marcado como morador: não precisa de liberação na portaria.</p>' : `<p class="hint">Quem não mora no condomínio é liberado na portaria automaticamente no dia do jogo, às 17h, com nome completo e CPF. Só você e a comissão veem esses dados.</p>
+  if (p && !p.morador && !p.cadastrado) html += `<div class="card"><h2>Entrada no condomínio</h2>
+      ${false ? '' : `<p class="hint">Quem não mora no condomínio é liberado na portaria automaticamente no dia do jogo, às 17h, com nome completo e CPF. Só você e a comissão veem esses dados.</p>
       <div class="field"><label for="my-full">Nome completo</label><input type="text" id="my-full" maxlength="70" value="${h(p.fullName || '')}" autocomplete="name"></div>
       <div class="field"><label for="my-cpf">CPF</label><input type="text" id="my-cpf" inputmode="numeric" maxlength="14" value="${h(p.cpf ? p.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : '')}" placeholder="000.000.000-00"></div>
       <button class="btn btn-primary" data-act="save-cpf">Salvar</button>`}</div>`;
