@@ -720,7 +720,7 @@
     for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
     const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.age; delete q.pin; if (p.id !== meId) { delete q.phone; delete q.cpf; delete q.fullName; } if (p.id !== meId) delete q.morador; delete q.cadastrado; delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
-    const bans = (s.bans || []).filter(b => !b.private || priv);
+    const bans = (s.bans || []).filter(b => (!b.private || priv) && b.pid === meId); // cada um só recebe a própria suspensão
     delete settings.moradores;
     return Object.assign({}, s, { players, games, settings, bans, suggestions: [], reservas: undefined, portaria: portaria(s, games), acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
   }
