@@ -515,16 +515,19 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     const capOf = i => six ? Math.min(6, Math.max(0, n - 6 * i)) : Math.ceil(n / k);
     const P = shuffle(ids.map(id => {
       const p = pm[id], r = v.roles[id] || {};
-      return { id, g: p.gender === 'F' ? 'F' : 'M', sk: Number(p.skill) || 3, st: !!r.setter, ag: Number(p.age) || 0 };
+      const sk0 = Number(p.skill) || 3;
+      /* Gênero só pesa entre os Muito bom (N1/N2); nos outros níveis tanto faz homem ou mulher. */
+      return { id, g: sk0 >= 7 ? (p.gender === 'F' ? 'F' : 'M') : 'X', sk: sk0, st: !!r.setter, ag: Number(p.age) || 0 };
     }), rand);
     const bySkill = arr => arr.sort((a, b) => b.sk - a.sk);
     const order = [
       ...bySkill(P.filter(x => x.st)),
       ...bySkill(P.filter(x => !x.st && x.g === 'F')),
-      ...bySkill(P.filter(x => !x.st && x.g === 'M'))
+      ...bySkill(P.filter(x => !x.st && x.g === 'M')),
+      ...bySkill(P.filter(x => !x.st && x.g === 'X'))
     ];
-    const T = Array.from({ length: k }, (_, i) => ({ cap: capOf(i), m: [], sum: 0, st: 0, f: 0, ages: [0, 0, 0, 0, 0] })).filter(t => t.cap > 0);
-    const put = (t, x) => { t.m.push(x); t.ages[x.ag]++; t.sum += x.sk; if (x.st) t.st++; if (x.g === 'F') t.f++; };
+    const T = Array.from({ length: k }, (_, i) => ({ cap: capOf(i), m: [], sum: 0, st: 0, f: 0, mm: 0, ages: [0, 0, 0, 0, 0] })).filter(t => t.cap > 0);
+    const put = (t, x) => { t.m.push(x); t.ages[x.ag]++; t.sum += x.sk; if (x.st) t.st++; if (x.g === 'F') t.f++; if (x.g === 'M') t.mm++; };
     /* Segunda/quinta: cada time leva obrigatoriamente 1 iniciante (N1/N2) e 1 muito bom (N1/N2).
        Se não tiver pra todos, os que tem são espalhados e o resto é equilibrado normal. */
     if (!(v.meta && v.meta.private)) {
@@ -538,7 +541,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       if (x.lock) continue;
       const open = T.filter(t => t.m.length < t.cap);
       /* gênero primeiro, depois faixa etária espalhada, depois nível */
-      const key = t => [x.st ? t.st : x.g === 'F' ? t.f : 0, x.ag ? t.ages[x.ag] : 0, t.sum / t.cap, t.m.length];
+      const key = t => [x.st ? t.st : x.g === 'F' ? t.f : x.g === 'M' ? t.mm : 0, x.ag ? t.ages[x.ag] : 0, t.sum / t.cap, t.m.length];
       open.sort((a, b) => { const ka = key(a), kb = key(b); for (let i = 0; i < 4; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i]; return rand() - 0.5; });
       put(open[0], x);
     }
