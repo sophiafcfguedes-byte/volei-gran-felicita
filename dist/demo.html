@@ -1595,6 +1595,7 @@ function renderMais() {
         <div class="ctrls"><select data-edit="${q.id}" data-field="gender" aria-label="Gênero de ${h(q.name)}">${opts(GENDERS, q.gender)}</select>
           <select data-edit="${q.id}" data-field="skill" aria-label="Nível de ${h(q.name)}">${opts(SKILLS, q.skill)}</select>
           <select data-edit="${q.id}" data-field="age" aria-label="Faixa etária de ${h(q.name)}">${opts(AGES, q.age || 0)}</select>
+          ${q.guest || q.morador || q.fixed ? '' : `<button class="tog setter" aria-pressed="${!!q.caixinha}" data-caixinha="${q.id}" title="Marcado: já pagou, check-in liberado sem comprovante">vaquinha</button>`}
           ${q.guest ? '' : `<button class="tog setter" aria-pressed="${!!q.fixed}" data-fixed="${q.id}">comissão</button><button class="tog setter" aria-pressed="${!!q.priv}" data-priv="${q.id}" title="Vê e faz check-in nos jogos fechados">${ICON.ball}${h(privLabel())}</button>`}
           <button class="btn btn-danger btn-sm" data-del="${q.id}" data-confirm>Excluir</button></div>
         ${q.guest ? '' : `<div class="pinrow"><span class="by">Senha:</span> <b class="pin">${q.pin ? h(q.pin) : '<span class="rem">sem senha</span>'}</b> <button class="link" data-newpin="${q.id}">${q.pin ? 'Trocar' : 'Gerar'}</button></div>
