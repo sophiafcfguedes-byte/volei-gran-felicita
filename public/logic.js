@@ -11,7 +11,7 @@
   const SETTINGS_VERSION = 7;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
@@ -277,6 +277,9 @@
 
   const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const randomLetter = () => LETTERS[Math.floor(Math.random() * LETTERS.length)];
+  /* Caixinha: mês no formato AAAA-MM (horário de Brasília). */
+  const monthKey = ts => { const p = spParts(ts); return p.y + '-' + String(p.m + 1).padStart(2, '0'); };
+  const pagou = (s, pid, mk) => !!(s.pag && s.pag[mk] && s.pag[mk][pid] && s.pag[mk][pid].st === 'ok');
   const cpfOk = d => {
     if (!/^\d{11}$/.test(d) || /^(\d)\1{10}$/.test(d)) return false;
     const dv = n => { let s = 0; for (let i = 0; i < n; i++) s += Number(d[i]) * (n + 1 - i); const r = s * 10 % 11; return r === 10 ? 0 : r; };
@@ -509,6 +512,14 @@
         return ok;
       }
       case 'unlock': s.settings.manualLockUntil = 0; return ok;
+      case 'pagAprovar': case 'pagRecusar': {
+        const mk = a.month || monthKey(now);
+        s.pag ||= {}; s.pag[mk] ||= {};
+        const cur = s.pag[mk][a.pid] || { ts: now };
+        s.pag[mk][a.pid] = Object.assign(cur, a.type === 'pagAprovar' ? { st: 'ok', why: '' } : { st: 'recusado', why: String(a.why || 'Comprovante recusado pela comissão.').slice(0, 200) });
+        return ok;
+      }
+      case 'toggleCaixinha': { const p = pm[a.id]; if (p && !p.guest) p.caixinha = !p.caixinha; return ok; } /* marcado = liberado (já pagou adiantado) */
       case 'punir': {
         /* Impedido de jogar o próximo jogo (segunda/quinta) por falta. */
         const p = s.players.find(x => !x.guest && fold(x.name) === fold(a.name));
@@ -554,6 +565,7 @@
         }
         if (!admin && p.id !== a.by && !p.guest) return fail('Cada um só marca o próprio nome.');
         const ban = !admin && (s.bans || []).find(b => b.pid === p.id && b.game === meta.id);
+        if (!admin && !p.guest && !p.caixinha && !pagou(s, p.id, monthKey(meta.startAt))) return fail('Você não fez o pagamento do mês, anexe seu comprovante para fazer seu check-in.');
         if (ban && ban.reason === 'falta') return fail('Você não compareceu da última vez e foi punida, aguarde o próximo dia de jogo.');
         if (ban) return fail(`Você tirou o nome do vôlei de ${DAYS[ban.fromDay].toLowerCase()} depois das ${ban.cutoff}, então está fora deste jogo.`);
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
@@ -723,11 +735,11 @@
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
     for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
-    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.age; delete q.pin; if (p.id !== meId) { delete q.phone; delete q.cpf; delete q.fullName; } if (p.id !== meId) { delete q.morador; delete q.cadastrado; } delete q.fails; delete q.lockUntil; return q; });
+    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.age; delete q.pin; if (p.id !== meId) { delete q.phone; delete q.cpf; delete q.fullName; } if (p.id !== meId) { delete q.morador; delete q.cadastrado; delete q.caixinha; } delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => (!b.private || priv) && b.pid === meId); // cada um só recebe a própria suspensão
     delete settings.moradores;
-    return Object.assign({}, s, { players, games, settings, bans, suggestions: [], reservas: undefined, portaria: portaria(s, games), acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
+    return Object.assign({}, s, { players, games, settings, bans, pag: (() => { const o = {}; for (const [mk, m] of Object.entries(s.pag || {})) if (m[meId]) o[mk] = { [meId]: { st: m[meId].st, why: m[meId].why || '', ts: m[meId].ts } }; return o; })(), suggestions: [], reservas: undefined, portaria: portaria(s, games), acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
   }
 
   /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */
@@ -795,5 +807,5 @@
     return { games: out };
   }
 
-  return { teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  return { monthKey, teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });

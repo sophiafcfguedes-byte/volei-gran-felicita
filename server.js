@@ -7,6 +7,8 @@ const crypto = require('crypto');
 const L = require('./public/logic.js');
 const Auth = require('./lib/auth.js');
 const VDS = require('./lib/vds.js');
+const Comprovante = require('./lib/comprovante.js');
+const UPLOADS = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
 
 const PORT = Number(process.env.PORT) || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -118,10 +120,10 @@ function send(res, code, body, type) {
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
-function readBody(req) {
+function readBody(req, max = 1e6) {
   return new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
-    req.on('data', c => { size += c.length; if (size > 1e6) { reject(new Error('grande demais')); req.destroy(); } else chunks.push(c); });
+    req.on('data', c => { size += c.length; if (size > max) { reject(new Error('grande demais')); req.destroy(); } else chunks.push(c); });
     req.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')); } catch (e) { reject(e); } });
   });
 }
@@ -153,6 +155,37 @@ http.createServer(async (req, res) => {
       const meId = r.ok && a.type === 'loginPlayer' ? r.pid : (r.ok ? a.by : a.by);
       if (r.ok || a.type === 'loginPlayer') { version = Date.now(); save(); }
       return send(res, 200, Object.assign(r, { version: version + ':' + (meId || ''), isAdmin: adm, now: Date.now(), state: L.publicState(state, adm, meId) }));
+    }
+    /* Caixinha: o jogador manda o comprovante (foto ou PDF) do mês. */
+    if (url.pathname === '/api/comprovante' && req.method === 'POST') {
+      const a = await readBody(req, 9e6);
+      const pid = Auth.who(state, SECRET, a.by, a.auth);
+      if (!pid) return send(res, 200, { ok: false, authFail: true, error: 'Entre de novo com sua senha.' });
+      const ext = /pdf/.test(a.type || '') ? 'pdf' : /png/.test(a.type || '') ? 'png' : 'jpg';
+      const buf = Buffer.from(String(a.data || '').replace(/^data:[^,]*,/, ''), 'base64');
+      if (buf.length < 500 || buf.length > 6e6) return send(res, 200, { ok: false, error: 'Arquivo inválido ou grande demais (máx. 6 MB).' });
+      const now = Date.now(), mk = L.monthKey(now), [y, m] = mk.split('-').map(Number);
+      fs.mkdirSync(path.join(UPLOADS, mk), { recursive: true });
+      const file = path.join(UPLOADS, mk, pid + '.' + ext);
+      for (const e of ['pdf', 'png', 'jpg']) { try { fs.unlinkSync(path.join(UPLOADS, mk, pid + '.' + e)); } catch (er) {} }
+      fs.writeFileSync(file, buf, { mode: 0o600 });
+      const p = state.players.find(x => x.id === pid);
+      const r = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: (p && (p.fullName || p.name)) || '' });
+      state.pag ||= {}; state.pag[mk] ||= {};
+      state.pag[mk][pid] = { ts: now, st: r.st, why: r.why || '', ext };
+      version = Date.now(); save();
+      return send(res, 200, { ok: true, st: r.st, why: r.why || '', version: version + ':' + pid, isAdmin: false, now, state: L.publicState(state, false, pid) });
+    }
+    /* Admin vê o comprovante. */
+    if (url.pathname === '/api/comprovante' && req.method === 'GET') {
+      if (!isAdmin(req)) return send(res, 403, 'proibido', 'text/plain');
+      const mk = String(url.searchParams.get('month') || ''), pid = String(url.searchParams.get('pid') || '');
+      if (!/^\d{4}-\d{2}$/.test(mk) || !/^[\w-]+$/.test(pid)) return send(res, 400, 'inválido', 'text/plain');
+      for (const e of ['pdf', 'png', 'jpg']) {
+        const f = path.join(UPLOADS, mk, pid + '.' + e);
+        if (fs.existsSync(f)) return send(res, 200, fs.readFileSync(f), e === 'pdf' ? 'application/pdf' : 'image/' + (e === 'png' ? 'png' : 'jpeg'));
+      }
+      return send(res, 404, 'não encontrado', 'text/plain');
     }
     /* Resumo em texto — útil para o robô do WhatsApp mandar no grupo. */
     if (url.pathname === '/api/avisos' && req.method === 'GET') {

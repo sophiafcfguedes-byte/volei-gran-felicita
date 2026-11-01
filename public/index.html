@@ -470,6 +470,30 @@ function renderHeader() {
 }
 
 /* Marca (on=true) ou tira (on=false) alguém da lista; avisa da suspensão se a lista já fechou. */
+/* Manda o comprovante da caixinha: foto vira JPEG menor (continua legível); PDF vai como está. */
+async function uploadComprovante(f) {
+  if (mode !== 'server') return toast('Na demonstração não dá pra anexar.', true);
+  if (f.size > 12e6) return toast('Arquivo grande demais.', true);
+  toast('Enviando e conferindo o comprovante…');
+  let data, type = f.type || '';
+  try {
+    if (/pdf/.test(type)) data = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(f); });
+    else {
+      const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = URL.createObjectURL(f); });
+      const k = Math.min(1, 2000 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      data = c.toDataURL('image/jpeg', 0.88); type = 'image/jpeg';
+    }
+    const r = await fetch('api/comprovante', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by: me, auth, type, data }) }).then(x => x.json());
+    if (r.authFail) { toast(r.error, true); return openWho(); }
+    if (!r.ok) return toast(r.error || 'Não consegui enviar.', true);
+    if (r.state) applyPayload(r);
+    render();
+    toast(r.st === 'ok' ? 'Comprovante aprovado! Já pode fazer check-in.' : 'Recebido. ' + (r.why || ''), r.st !== 'ok');
+  } catch (e) { toast('Não consegui ler esse arquivo.', true); }
+}
+
 function setIn(pid, on) {
   const g = S.current;
   if (!on && pid === me && !isAdmin && g && now() >= g.cutoffAt && now() < g.endAt && D.regular.includes(pid)) {
@@ -520,6 +544,33 @@ function renderLista() {
   else if (lk.reason === 'closed') lockMsg = `<div class="notice">A lista fechou às ${h(S.current.cutoff)} com os confirmados. A espera não sobe mais: quem sair agora deixa a vaga vazia e fica fora do próximo jogo.</div>`;
   else if (lk.locked && !isAdmin) lockMsg = `<div class="notice">A lista está fechada agora. Só quem é admin consegue mexer.</div>`;
   const prio = false;
+  const MESN = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const mk = LG.monthKey(now()), mesNome = MESN[Number(mk.slice(5)) - 1];
+  const PST = { ok: ['Pago', 'ac-ok'], pendente: ['Em análise', 'ac-cad'], recusado: ['Recusado', 'ac-err'], falta: ['Não pagou', 'ac-err'], isento: ['Liberado', 'ac-mor'] };
+  const pagOf = pid => ((RAW.pag || {})[mk] || {})[pid];
+  function myCaixinha() {
+    const p = me && P(me);
+    if (!p || p.guest || p.caixinha || isAdmin) return '';
+    const g = pagOf(me), st = g ? g.st : 'falta';
+    if (st === 'ok') return `<div class="card"><div class="sec-h"><h2>Caixinha de ${mesNome}</h2><span class="ac-st ac-ok">Pago</span></div></div>`;
+    return `<div class="card"><div class="sec-h"><h2>Caixinha de ${mesNome}</h2><span class="ac-st ${PST[st][1]}">${PST[st][0]}</span></div>
+      <p class="hint">${st === 'falta' ? `Para fazer check-in este mês, anexe o comprovante de pagamento de <b>R$ 5,00</b> (com a data de ${mesNome} e o seu nome). Vale o mês inteiro.` : h(g.why || '')}</p>
+      <label class="btn btn-primary" for="cx-file">${st === 'falta' ? 'Anexar comprovante' : 'Anexar outro comprovante'}</label><input type="file" id="cx-file" accept="image/*,application/pdf" hidden></div>`;
+  }
+  function caixinhaAdmin() {
+    const regs = S.players.filter(p => !p.guest).slice().sort(byName);
+    const stOf = p => p.caixinha ? 'isento' : (pagOf(p.id) || {}).st || 'falta';
+    const n = regs.filter(p => stOf(p) === 'ok').length, tot = regs.length;
+    return `<div class="card"><div class="sec-h"><h2>Caixinha · ${mesNome}</h2><span class="muted">${n + regs.filter(p => p.caixinha).length}/${tot} em dia</span></div>
+      <p class="hint">Todo mundo precisa anexar o comprovante do mês para fazer check-in. Marque <b>caixinha</b> para liberar quem já pagou adiantado (vale até você desmarcar).</p>
+      ${regs.map(q => { const st = stOf(q), g = pagOf(q.id); return `<details class="res-row" style="display:block"><summary style="display:flex;gap:10px;align-items:center;cursor:pointer"><span class="nm" style="flex:1">${h(q.name)}</span><span class="ac-st ${PST[st][1]}">${PST[st][0]}</span></summary>
+        <div style="padding:10px 0 4px;display:flex;flex-wrap:wrap;gap:8px;align-items:center"><button class="tog setter" aria-pressed="${!!q.caixinha}" data-caixinha="${q.id}">caixinha</button>
+        ${g ? `<button class="btn btn-ghost btn-sm" data-vercx="${q.id}">Ver comprovante</button>` : ''}
+        ${!q.caixinha && st !== 'ok' ? `<button class="btn btn-primary btn-sm" data-pagok="${q.id}">Aprovar</button>` : ''}
+        ${g && st !== 'recusado' ? `<button class="btn btn-danger btn-sm" data-pagno="${q.id}">Recusar</button>` : ''}
+        ${g && g.why ? `<p class="hint" style="width:100%">${h(g.why)}</p>` : ''}</div></details>`; }).join('')}
+    </div>`;
+  }
   function impedidos() {
     const list = (S.bans || []).filter(b => b.reason === 'falta').slice().sort((x, y) => x.game.localeCompare(y.game));
     return `<div class="card"><h2>Impedidos de jogar o próximo jogo</h2>
@@ -543,7 +594,7 @@ function renderLista() {
   const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; const rm = !isAdmin && x.by === me && id !== me && p && (p.guest || x.asGuest) ? `<button class="link" style="color:#940B29" data-unguest="${id}">tirar</button>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} </span>${by || t}${rm}</li>`; };
   return `${demoNote}${renderWho()}${lockMsg}
     <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir até as ${h(S.current ? S.current.cutoff : '17:00')} do dia do jogo, quando a lista fecha.</p>
-    ${isAdmin ? impedidos() : ''}${myCheckin()}${false ? `<div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
+    ${isAdmin ? impedidos() + caixinhaAdmin() : ''}${myCaixinha()}${myCheckin()}${false ? `<div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
     ${section('Mulheres', members.filter(p => p.gender === 'F'))}
     ${section('Homens', members.filter(p => p.gender !== 'F'))}
     ${section('Convidados', guests)}` : ''}
@@ -833,6 +884,10 @@ document.addEventListener('click', async e => {
   if (t.dataset.unban) return act({ type: 'unban', pid: t.dataset.unban, game: t.dataset.ugame }, 'Liberado.');
   if (t.dataset.paid) return act({ type: 'togglePaid', id: t.dataset.paid });
   if (t.dataset.pick) { const i = document.getElementById('pun-name'); i.value = t.dataset.pick; document.getElementById('pun-sug').innerHTML = ''; return; }
+  if (t.dataset.caixinha) return act({ type: 'toggleCaixinha', id: t.dataset.caixinha });
+  if (t.dataset.pagok) return act({ type: 'pagAprovar', pid: t.dataset.pagok, month: LG.monthKey(now()) }, 'Pagamento aprovado.');
+  if (t.dataset.pagno) return act({ type: 'pagRecusar', pid: t.dataset.pagno, month: LG.monthKey(now()), why: 'Comprovante recusado pela comissão. Anexe outro.' }, 'Comprovante recusado.');
+  if (t.dataset.vercx) { const w = window.open('', '_blank'); fetch('api/comprovante?month=' + LG.monthKey(now()) + '&pid=' + encodeURIComponent(t.dataset.vercx), { headers: { 'x-admin-token': token } }).then(r => r.ok ? r.blob() : Promise.reject()).then(b => { const u = URL.createObjectURL(b); if (w) w.location = u; else location.href = u; }).catch(() => { if (w) w.close(); toast('Não achei o comprovante.', true); }); return; }
   if (t.dataset.unguest) return act({ type: 'leave', pid: t.dataset.unguest }, 'Convidado removido.');
   if (t.dataset.morador) return act({ type: 'toggleMorador', id: t.dataset.morador });
   if (t.dataset.cadastrado) return act({ type: 'toggleCadastrado', id: t.dataset.cadastrado });
@@ -893,6 +948,7 @@ document.addEventListener('change', e => {
   if (t.dataset.phone) return act({ type: 'setPhone', id: t.dataset.phone, phone: t.value }, 'Celular salvo.');
   if (t.dataset.edit) { const q = P(t.dataset.edit); if (!q) return; return act(Object.assign({ type: 'savePlayer' }, q, { [t.dataset.field]: t.value }), 'Salvo.'); }
   if (t.id === 'photo-in' && t.files && t.files[0]) return uploadPhoto(t.files[0]);
+  if (t.id === 'cx-file' && t.files && t.files[0]) return uploadComprovante(t.files[0]);
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'who-q') filterWho(e.target.value);
