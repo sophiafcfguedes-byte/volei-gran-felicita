@@ -498,7 +498,8 @@ async function addGuestFlow() {
       if (!r.ok) return toast(r.error || 'Não consegui confirmar o comprovante.', true);
     } catch (e) { return toast('Não consegui ler esse arquivo.', true); }
   }
-  return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill'), cpf: val('g-cpf') }, 'Convidado adicionado.', ['g-name', 'g-cpf']).then(ok => { if (ok && el) el.value = ''; return ok; });
+  const morador = !!(P(me) && P(me).morador);
+  return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill'), cpf: val('g-cpf') }, morador ? 'Convidado adicionado. Você está responsável por liberar a pessoa na portaria.' : 'Convidado adicionado.', ['g-name', 'g-cpf']).then(ok => { if (ok && el) el.value = ''; return ok; });
 }
 async function fileToData(f) {
   if (f.size > 12e6) throw new Error('grande');
@@ -903,7 +904,7 @@ function closeSheet() { $('#sheet').hidden = true; $('#sheet').innerHTML = ''; }
 
 /* ---------- Eventos ---------- */
 let toastTimer;
-function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, err ? 4000 : 2200); }
+function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, err || msg.length > 40 ? 4500 : 2200); }
 const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
 const readSched = () => [...document.querySelectorAll('[data-sched]')].map(r => { const i = r.dataset.sched; return { day: Number(val('sc-day-' + i)), start: val('sc-start-' + i), end: val('sc-end-' + i), openDay: Number(val('sc-oday-' + i)), openTime: val('sc-otime-' + i), cutoff: val('sc-cut-' + i), max: Number(val('sc-max-' + i)), teams: Number(val('sc-teams-' + i)), fixed: document.getElementById('sc-fixed-' + i).checked, guests: document.getElementById('sc-guests-' + i).checked, private: document.getElementById('sc-priv-' + i).checked }; });
 
