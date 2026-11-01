@@ -562,8 +562,8 @@ function renderLista() {
     const p = me && P(me);
     if (!p || p.guest || p.caixinha || isAdmin) return '';
     const g = pagOf(me), st = g ? g.st : 'falta';
-    if (st === 'ok') return `<div class="card"><div class="sec-h"><h2>Caixinha de ${mesNome}</h2><span class="ac-st ac-ok">Pago</span></div></div>`;
-    return `<div class="card"><div class="sec-h"><h2>Caixinha de ${mesNome}</h2><span class="ac-st ${PST[st][1]}">${PST[st][0]}</span></div>
+    if (st === 'ok') return `<div class="card"><div class="sec-h"><h2>Vaquinha de ${mesNome}</h2><span class="ac-st ac-ok">Pago</span></div></div>`;
+    return `<div class="card"><div class="sec-h"><h2>Vaquinha de ${mesNome}</h2><span class="ac-st ${PST[st][1]}">${PST[st][0]}</span></div>
       <p class="hint">${st === 'falta' ? `Para fazer check-in este mês, anexe o comprovante de pagamento de <b>R$ 5,00</b> (com a data de ${mesNome} e o seu nome). Vale o mês inteiro.` : h(g.why || '')}</p>
       <label class="btn btn-primary" for="cx-file">${st === 'falta' ? 'Anexar comprovante' : 'Anexar outro comprovante'}</label><input type="file" id="cx-file" accept="image/*,application/pdf" hidden></div>`;
   }
@@ -571,10 +571,10 @@ function renderLista() {
     const regs = S.players.filter(p => !p.guest).slice().sort(byName);
     const stOf = p => p.caixinha ? 'isento' : (pagOf(p.id) || {}).st || 'falta';
     const n = regs.filter(p => stOf(p) === 'ok').length, tot = regs.length;
-    return `<div class="card"><div class="sec-h"><h2>Caixinha · ${mesNome}</h2><span class="muted">${n + regs.filter(p => p.caixinha).length}/${tot} em dia</span></div>
-      <p class="hint">Todo mundo precisa anexar o comprovante do mês para fazer check-in. Marque <b>caixinha</b> para liberar quem já pagou adiantado (vale até você desmarcar).</p>
+    return `<div class="card"><div class="sec-h"><h2>Vaquinha · ${mesNome}</h2><span class="muted">${n + regs.filter(p => p.caixinha).length}/${tot} em dia</span></div>
+      <p class="hint">Todo mundo precisa anexar o comprovante do mês para fazer check-in. Marque <b>vaquinha</b> para liberar quem já pagou adiantado (vale até você desmarcar).</p>
       ${regs.map(q => { const st = stOf(q), g = pagOf(q.id); return `<details class="res-row" style="display:block"><summary style="display:flex;gap:10px;align-items:center;cursor:pointer"><span class="nm" style="flex:1">${h(q.name)}</span><span class="ac-st ${PST[st][1]}">${PST[st][0]}</span></summary>
-        <div style="padding:10px 0 4px;display:flex;flex-wrap:wrap;gap:8px;align-items:center"><button class="tog setter" aria-pressed="${!!q.caixinha}" data-caixinha="${q.id}">caixinha</button>
+        <div style="padding:10px 0 4px;display:flex;flex-wrap:wrap;gap:8px;align-items:center"><button class="tog setter" aria-pressed="${!!q.caixinha}" data-caixinha="${q.id}">vaquinha</button>
         ${g ? `<button class="btn btn-ghost btn-sm" data-vercx="${q.id}">Ver comprovante</button>` : ''}
         ${!q.caixinha && st !== 'ok' ? `<button class="btn btn-primary btn-sm" data-pagok="${q.id}">Aprovar</button>` : ''}
         ${g && st !== 'recusado' ? `<button class="btn btn-danger btn-sm" data-pagno="${q.id}">Recusar</button>` : ''}
