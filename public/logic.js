@@ -283,6 +283,7 @@
   const VAQUINHA_DESDE = '2026-11-04';
   const pagaVaquinha = p => !!p && !p.guest && !p.morador && !p.fixed && !p.caixinha;
   const devePagarVaquinha = (p, meta) => pagaVaquinha(p) && !!meta && meta.id >= VAQUINHA_DESDE;
+  const pagouConvidado = (s, name, mk) => !!(s.pagGuests && s.pagGuests[mk] && s.pagGuests[mk][fold(name)] && s.pagGuests[mk][fold(name)].st === 'ok');
   const pagou = (s, pid, mk) => !!(s.pag && s.pag[mk] && s.pag[mk][pid] && s.pag[mk][pid].st === 'ok');
   const cpfOk = d => {
     if (!/^\d{11}$/.test(d) || /^(\d)\1{10}$/.test(d)) return false;
@@ -629,6 +630,7 @@
           return ok;
         }
         if (!p && name.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
+        if (!admin && meta.id >= VAQUINHA_DESDE && !pagouConvidado(s, name, monthKey(meta.startAt))) return fail('Anexe o comprovante da vaquinha do convidado (R$ 5,00, com o nome dele e a data deste mês).');
         const gcpf = String(a.cpf || '').replace(/\D/g, '');
         if (!gcpf && !(p && p.guest && p.cpf) && !(me && me.morador)) return fail('Coloque o CPF do convidado (é pra liberar a entrada na portaria).');
         if (gcpf && !cpfOk(gcpf)) return fail('CPF do convidado inválido. Confira os números.');

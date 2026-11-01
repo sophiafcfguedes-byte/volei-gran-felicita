@@ -572,6 +572,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   const VAQUINHA_DESDE = '2026-11-04';
   const pagaVaquinha = p => !!p && !p.guest && !p.morador && !p.fixed && !p.caixinha;
   const devePagarVaquinha = (p, meta) => pagaVaquinha(p) && !!meta && meta.id >= VAQUINHA_DESDE;
+  const pagouConvidado = (s, name, mk) => !!(s.pagGuests && s.pagGuests[mk] && s.pagGuests[mk][fold(name)] && s.pagGuests[mk][fold(name)].st === 'ok');
   const pagou = (s, pid, mk) => !!(s.pag && s.pag[mk] && s.pag[mk][pid] && s.pag[mk][pid].st === 'ok');
   const cpfOk = d => {
     if (!/^\d{11}$/.test(d) || /^(\d)\1{10}$/.test(d)) return false;
@@ -918,6 +919,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
           return ok;
         }
         if (!p && name.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
+        if (!admin && meta.id >= VAQUINHA_DESDE && !pagouConvidado(s, name, monthKey(meta.startAt))) return fail('Anexe o comprovante da vaquinha do convidado (R$ 5,00, com o nome dele e a data deste mês).');
         const gcpf = String(a.cpf || '').replace(/\D/g, '');
         if (!gcpf && !(p && p.guest && p.cpf) && !(me && me.morador)) return fail('Coloque o CPF do convidado (é pra liberar a entrada na portaria).');
         if (gcpf && !cpfOk(gcpf)) return fail('CPF do convidado inválido. Confira os números.');
@@ -1301,6 +1303,32 @@ function renderHeader() {
 
 /* Marca (on=true) ou tira (on=false) alguém da lista; avisa da suspensão se a lista já fechou. */
 /* Manda o comprovante da caixinha: foto vira JPEG menor (continua legível); PDF vai como está. */
+/* Convidado: se anexou comprovante, manda primeiro (lido com o nome do convidado) e só depois coloca na lista. */
+async function addGuestFlow() {
+  const el = document.getElementById('g-file'), f = el && el.files && el.files[0];
+  if (f) {
+    const name = val('g-name').trim();
+    if (name.split(/\s+/).filter(w => w.length >= 2).length < 2) return toast('Coloque nome e sobrenome do convidado.', true);
+    toast('Conferindo o comprovante do convidado…');
+    try {
+      const data = await fileToData(f);
+      const r = await fetch('api/comprovante', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by: me, auth, type: data.type, data: data.url, guest: name, month: LG.monthKey(S.current ? S.current.startAt : now()) }) }).then(x => x.json());
+      if (r.authFail) { toast(r.error, true); return openWho(); }
+      if (!r.ok) return toast(r.error || 'Não consegui confirmar o comprovante.', true);
+    } catch (e) { return toast('Não consegui ler esse arquivo.', true); }
+  }
+  return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill'), cpf: val('g-cpf') }, 'Convidado adicionado.', ['g-name', 'g-cpf']).then(ok => { if (ok && el) el.value = ''; return ok; });
+}
+async function fileToData(f) {
+  if (f.size > 12e6) throw new Error('grande');
+  if (/pdf/.test(f.type || '')) return { type: 'application/pdf', url: await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(f); }) };
+  const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = URL.createObjectURL(f); });
+  const k = Math.min(1, 2000 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+  c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return { type: 'image/jpeg', url: c.toDataURL('image/jpeg', 0.88) };
+}
+
 async function uploadComprovante(f) {
   if (mode !== 'server') return toast('Na demonstração não dá pra anexar.', true);
   if (f.size > 12e6) return toast('Arquivo grande demais.', true);
@@ -1434,6 +1462,7 @@ function renderLista() {
       <div class="grid2"><div class="field"><label for="g-gender">Gênero</label><select id="g-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
       <div class="field"><label for="g-skill">Nível</label><select id="g-skill">${opts(SKILLS, 3)}</select></div></div>
       ${P(me) && P(me).morador ? '' : `<div class="field"><label for="g-cpf">CPF do convidado (obrigatório, pra liberar na portaria)</label><input type="text" id="g-cpf" inputmode="numeric" maxlength="14" autocomplete="off" placeholder="000.000.000-00"></div>`}
+      ${S.current && S.current.id >= '2026-11-04' ? `<div class="field"><label for="g-file">Comprovante da vaquinha do convidado (R$ 5,00, com o nome dele)</label><input type="file" id="g-file" accept="image/*,application/pdf"><div class="hint">Se ele já pagou este mês, não precisa anexar de novo.</div></div>` : ''}
       <button class="btn btn-primary" data-act="addGuest">Adicionar convidado</button></div>` : ''}
     <div class="card"><div class="sec-h"><h2>Confirmados</h2><span class="muted">${D.confirmed.length}/${S.settings.max}</span></div>
       ${D.fixed.length ? `<ul class="conf fx">${D.fixed.map(id => `<li>${avatar(P(id))}<span class="nm">${h(nameOf(P(id)))}</span><span class="by">vaga garantida</span></li>`).join('')}</ul>` : ''}
@@ -1756,7 +1785,8 @@ document.addEventListener('click', async e => {
     case 'bulk-add': return act({ type: 'bulkAdd', text: val('bulk-text'), gender: val('bulk-gender'), priv: document.getElementById('bulk-priv').checked }, null, ['bulk-text']).then(ok => { if (ok && lastResult && lastResult.added != null) toast(`${lastResult.added} cadastrado${lastResult.added === 1 ? '' : 's'}${lastResult.skipped ? `, ${lastResult.skipped} já existia${lastResult.skipped === 1 ? '' : 'm'}` : ''}.`); });
     case 'close-sheet': confirmFn = null; return closeSheet();
     case 'confirm-yes': { const f = confirmFn; confirmFn = null; closeSheet(); if (f) await f(); return; }
-    case 'addGuest': return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill'), cpf: val('g-cpf') }, 'Convidado adicionado.', ['g-name', 'g-cpf']);
+    case 'addGuest': return addGuestFlow();
+    case 'addGuestRaw': return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill'), cpf: val('g-cpf') }, 'Convidado adicionado.', ['g-name', 'g-cpf']);
     case 'draw': return act({ type: 'draw' }, 'Times sorteados!');
     case 'photo-del': return act({ type: 'photo', pid: me, photo: null }, 'Foto removida.');
     case 'sug-anon': return act({ type: 'suggest', text: val('sug-text'), anon: true }, 'Sugestão enviada. Obrigado!', ['sug-text']);

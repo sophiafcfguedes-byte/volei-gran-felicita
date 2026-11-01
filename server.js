@@ -167,9 +167,21 @@ http.createServer(async (req, res) => {
       const now = Date.now(), cur = L.monthKey(now), nxt = L.monthKey(now + 20 * 864e5);
       const mk = [cur, nxt].includes(a.month) ? a.month : cur, [y, m] = mk.split('-').map(Number); /* mês do jogo (pode ser o próximo, no fim do mês) */
       fs.mkdirSync(path.join(UPLOADS, mk), { recursive: true });
-      const file = path.join(UPLOADS, mk, pid + '.' + ext);
-      for (const e of ['pdf', 'png', 'jpg']) { try { fs.unlinkSync(path.join(UPLOADS, mk, pid + '.' + e)); } catch (er) {} }
+      /* Convidado: comprovante fica pelo nome dele (vale o mês todo, mesmo o convidado sendo apagado depois do jogo). */
+      const gName = a.guest ? String(a.guest).replace(/\s+/g, ' ').trim().slice(0, 60) : '';
+      const gKey = gName ? gName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : '';
+      if (a.guest && gName.split(' ').filter(w => w.length >= 2).length < 2) return send(res, 200, { ok: false, error: 'Coloque nome e sobrenome do convidado.' });
+      const base = gName ? 'g-' + crypto.createHash('sha1').update(gKey).digest('hex').slice(0, 16) : pid;
+      const file = path.join(UPLOADS, mk, base + '.' + ext);
+      for (const e of ['pdf', 'png', 'jpg']) { try { fs.unlinkSync(path.join(UPLOADS, mk, base + '.' + e)); } catch (er) {} }
       fs.writeFileSync(file, buf, { mode: 0o600 });
+      if (gName) {
+        const rg = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: gName });
+        state.pagGuests ||= {}; state.pagGuests[mk] ||= {};
+        state.pagGuests[mk][gKey] = { ts: now, st: rg.st, by: pid, name: gName };
+        version = Date.now(); save();
+        return send(res, 200, { ok: rg.st === 'ok', st: rg.st, why: rg.why || '', error: rg.st === 'ok' ? '' : (rg.why || '').replace('Um admin vai conferir.', 'Confira e anexe outro.') });
+      }
       const p = state.players.find(x => x.id === pid);
       const r = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: (p && (p.fullName || p.name)) || '' });
       state.pag ||= {}; state.pag[mk] ||= {};
