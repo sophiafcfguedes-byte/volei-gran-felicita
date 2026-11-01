@@ -755,7 +755,7 @@
   }
 
   /* Caixinha: saldo inicial + R$ 5 por comprovante aprovado (a partir de 1º/11/2026) + entradas − gastos lançados pelos admins. */
-  const CAIXA_INICIAL = 65.07, CAIXA_DESDE = Date.parse('2026-11-01T00:00:00-03:00'), VALOR_VAQUINHA = 5;
+  const CAIXA_INICIAL = 65.07, CAIXA_DESDE = Date.parse('2026-11-01T19:55:00-03:00'), VALOR_VAQUINHA = 5;
   function caixaView(s) {
     let n = 0;
     for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && (e.ts || 0) >= CAIXA_DESDE) n++;
