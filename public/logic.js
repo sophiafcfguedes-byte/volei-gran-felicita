@@ -630,7 +630,7 @@
           return ok;
         }
         if (!p && name.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
-        if (!admin && meta.id >= VAQUINHA_DESDE && !pagouConvidado(s, name, monthKey(meta.startAt))) return fail('Anexe o comprovante da vaquinha do convidado (R$ 5,00, com o nome dele e a data deste mês).');
+        if (!admin && meta.id >= '2026-11-01' && !pagouConvidado(s, name, monthKey(meta.startAt))) return fail('Anexe o comprovante da vaquinha do convidado (R$ 5,00, com o nome dele e a data deste mês).');
         const gcpf = String(a.cpf || '').replace(/\D/g, '');
         if (!gcpf && !(p && p.guest && p.cpf) && !(me && me.morador)) return fail('Coloque o CPF do convidado (é pra liberar a entrada na portaria).');
         if (gcpf && !cpfOk(gcpf)) return fail('CPF do convidado inválido. Confira os números.');
