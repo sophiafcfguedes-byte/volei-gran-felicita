@@ -279,6 +279,9 @@
   const randomLetter = () => LETTERS[Math.floor(Math.random() * LETTERS.length)];
   /* Caixinha: mês no formato AAAA-MM (horário de Brasília). */
   const monthKey = ts => { const p = spParts(ts); return p.y + '-' + String(p.m + 1).padStart(2, '0'); };
+  /* Quem precisa pagar a vaquinha: a partir de VAQUINHA_DESDE; moradores, comissão e quem tem vaquinha marcada não pagam. */
+  const VAQUINHA_DESDE = '2026-11-05';
+  const devePagarVaquinha = (p, meta) => !!p && !p.guest && !p.morador && !p.fixed && !p.caixinha && !!meta && meta.id >= VAQUINHA_DESDE;
   const pagou = (s, pid, mk) => !!(s.pag && s.pag[mk] && s.pag[mk][pid] && s.pag[mk][pid].st === 'ok');
   const cpfOk = d => {
     if (!/^\d{11}$/.test(d) || /^(\d)\1{10}$/.test(d)) return false;
@@ -565,7 +568,7 @@
         }
         if (!admin && p.id !== a.by && !p.guest) return fail('Cada um só marca o próprio nome.');
         const ban = !admin && (s.bans || []).find(b => b.pid === p.id && b.game === meta.id);
-        if (!admin && !p.guest && !p.caixinha && !pagou(s, p.id, monthKey(meta.startAt))) return fail('Você não fez o pagamento do mês, anexe seu comprovante para fazer seu check-in.');
+        if (!admin && devePagarVaquinha(p, meta) && !pagou(s, p.id, monthKey(meta.startAt))) return fail('Você não fez o pagamento do mês, anexe seu comprovante para fazer seu check-in.');
         if (ban && ban.reason === 'falta') return fail('Você não compareceu da última vez e foi punida, aguarde o próximo dia de jogo.');
         if (ban) return fail(`Você tirou o nome do vôlei de ${DAYS[ban.fromDay].toLowerCase()} depois das ${ban.cutoff}, então está fora deste jogo.`);
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
@@ -807,5 +810,5 @@
     return { games: out };
   }
 
-  return { monthKey, teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  return { devePagarVaquinha, monthKey, teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });

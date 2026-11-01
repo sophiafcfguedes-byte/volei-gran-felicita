@@ -565,6 +565,9 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   const randomLetter = () => LETTERS[Math.floor(Math.random() * LETTERS.length)];
   /* Caixinha: mês no formato AAAA-MM (horário de Brasília). */
   const monthKey = ts => { const p = spParts(ts); return p.y + '-' + String(p.m + 1).padStart(2, '0'); };
+  /* Quem precisa pagar a vaquinha: a partir de VAQUINHA_DESDE; moradores, comissão e quem tem vaquinha marcada não pagam. */
+  const VAQUINHA_DESDE = '2026-11-05';
+  const devePagarVaquinha = (p, meta) => !!p && !p.guest && !p.morador && !p.fixed && !p.caixinha && !!meta && meta.id >= VAQUINHA_DESDE;
   const pagou = (s, pid, mk) => !!(s.pag && s.pag[mk] && s.pag[mk][pid] && s.pag[mk][pid].st === 'ok');
   const cpfOk = d => {
     if (!/^\d{11}$/.test(d) || /^(\d)\1{10}$/.test(d)) return false;
@@ -851,7 +854,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         }
         if (!admin && p.id !== a.by && !p.guest) return fail('Cada um só marca o próprio nome.');
         const ban = !admin && (s.bans || []).find(b => b.pid === p.id && b.game === meta.id);
-        if (!admin && !p.guest && !p.caixinha && !pagou(s, p.id, monthKey(meta.startAt))) return fail('Você não fez o pagamento do mês, anexe seu comprovante para fazer seu check-in.');
+        if (!admin && devePagarVaquinha(p, meta) && !pagou(s, p.id, monthKey(meta.startAt))) return fail('Você não fez o pagamento do mês, anexe seu comprovante para fazer seu check-in.');
         if (ban && ban.reason === 'falta') return fail('Você não compareceu da última vez e foi punida, aguarde o próximo dia de jogo.');
         if (ban) return fail(`Você tirou o nome do vôlei de ${DAYS[ban.fromDay].toLowerCase()} depois das ${ban.cutoff}, então está fora deste jogo.`);
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
@@ -1093,7 +1096,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     return { games: out };
   }
 
-  return { monthKey, teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  return { devePagarVaquinha, monthKey, teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });
 
 </script>
@@ -1270,7 +1273,7 @@ function render() {
 /* Jogador que precisa do comprovante do mês e ainda não tem aprovado (quem tem caixinha marcado está liberado). */
 function devePagar() {
   const p = me && P(me);
-  if (!p || p.guest || p.caixinha || isAdmin) return false;
+  if (!p || isAdmin || !LG.devePagarVaquinha(p, S.current)) return false;
   const g = ((RAW.pag || {})[LG.monthKey(S.current ? S.current.startAt : now())] || {})[me];
   return !(g && g.st === 'ok');
 }
@@ -1373,7 +1376,7 @@ function renderLista() {
   const pagOf = pid => ((RAW.pag || {})[mk] || {})[pid];
   function myCaixinha() {
     const p = me && P(me);
-    if (!p || p.guest || p.caixinha || isAdmin) return '';
+    if (!p || isAdmin || !LG.devePagarVaquinha(p, S.current)) return '';
     const g = pagOf(me), st = g ? g.st : 'falta';
     if (st === 'ok') return `<div class="card"><div class="sec-h"><h2>Vaquinha de ${mesNome}</h2><span class="ac-st ac-ok">Pago</span></div></div>`;
     return `<div class="card"><div class="sec-h"><h2>Vaquinha de ${mesNome}</h2><span class="ac-st ${PST[st][1]}">${PST[st][0]}</span></div>
@@ -1381,11 +1384,11 @@ function renderLista() {
       <label class="btn btn-primary" for="cx-file">${st === 'falta' ? 'Anexar comprovante' : 'Anexar outro comprovante'}</label><input type="file" id="cx-file" accept="image/*,application/pdf" hidden></div>`;
   }
   function caixinhaAdmin() {
-    const regs = S.players.filter(p => !p.guest).slice().sort(byName);
+    const regs = S.players.filter(p => !p.guest && !p.morador && !p.fixed).slice().sort(byName);
     const stOf = p => p.caixinha ? 'isento' : (pagOf(p.id) || {}).st || 'falta';
     const n = regs.filter(p => stOf(p) === 'ok').length, tot = regs.length;
     return `<div class="card"><div class="sec-h"><h2>Vaquinha · ${mesNome}</h2><span class="muted">${n + regs.filter(p => p.caixinha).length}/${tot} em dia</span></div>
-      <p class="hint">Todo mundo precisa anexar o comprovante do mês para fazer check-in. Marque <b>vaquinha</b> para liberar quem já pagou adiantado (vale até você desmarcar).</p>
+      <p class="hint">A partir de quinta 5/11, quem não é morador nem da comissão precisa anexar o comprovante do mês para fazer check-in. Marque <b>vaquinha</b> para liberar quem já pagou adiantado (vale até você desmarcar).</p>
       ${regs.map(q => { const st = stOf(q), g = pagOf(q.id); return `<details class="res-row" style="display:block"><summary style="display:flex;gap:10px;align-items:center;cursor:pointer"><span class="nm" style="flex:1">${h(q.name)}</span><span class="ac-st ${PST[st][1]}">${PST[st][0]}</span></summary>
         <div style="padding:10px 0 4px;display:flex;flex-wrap:wrap;gap:8px;align-items:center"><button class="tog setter" aria-pressed="${!!q.caixinha}" data-caixinha="${q.id}">vaquinha</button>
         ${g ? `<button class="btn btn-ghost btn-sm" data-vercx="${q.id}">Ver comprovante</button>` : ''}
