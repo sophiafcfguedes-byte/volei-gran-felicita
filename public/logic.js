@@ -11,7 +11,7 @@
   const SETTINGS_VERSION = 7;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
@@ -281,8 +281,10 @@
   const monthKey = ts => { const p = spParts(ts); return p.y + '-' + String(p.m + 1).padStart(2, '0'); };
   /* Quem precisa pagar a vaquinha: a partir de VAQUINHA_DESDE; moradores, comissão e quem tem vaquinha marcada não pagam. */
   const VAQUINHA_DESDE = '2026-11-04';
-  const pagaVaquinha = p => !!p && !p.guest && !p.morador && !p.fixed && !p.caixinha;
-  const devePagarVaquinha = (p, meta) => pagaVaquinha(p) && !!meta && meta.id >= VAQUINHA_DESDE;
+  /* Vaquinha ligada = liberado (pagou adiantado); com "desliga em" (AAAA-MM), a liberação acaba no começo daquele mês. */
+  const liberadoVaquinha = (p, mk) => !!p.caixinha && (!p.caixinhaAte || (mk || monthKey(Date.now())) < p.caixinhaAte);
+  const pagaVaquinha = (p, mk) => !!p && !p.guest && !p.morador && !p.fixed && !liberadoVaquinha(p, mk);
+  const devePagarVaquinha = (p, meta) => !!meta && pagaVaquinha(p, monthKey(meta.startAt)) && meta.id >= VAQUINHA_DESDE;
   /* Convidado pagou no mês: pelo nome ou pelo CPF (o CPF fica guardado na primeira vez que ele entra). */
   const pagouConvidado = (s, name, mk, cpf) => {
     const m = (s.pagGuests || {})[mk] || {};
@@ -530,6 +532,7 @@
         s.pag[mk][a.pid] = Object.assign(cur, a.type === 'pagAprovar' ? { st: 'ok', why: '' } : { st: 'recusado', why: String(a.why || 'Comprovante recusado pela comissão.').slice(0, 200) });
         return ok;
       }
+      case 'vaquinhaAte': { const p = pm[a.id]; if (p && !p.guest) p.caixinhaAte = /^\d{4}-\d{2}$/.test(a.month || '') ? a.month : ''; return ok; }
       case 'toggleCaixinha': { const p = pm[a.id]; if (p && !p.guest) p.caixinha = !p.caixinha; return ok; } /* marcado = liberado (já pagou adiantado) */
       case 'punir': {
         /* Impedido de jogar o próximo jogo (segunda/quinta) por falta. */
@@ -747,7 +750,7 @@
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
     for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
-    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.age; delete q.pin; if (p.id !== meId) { delete q.phone; delete q.cpf; delete q.fullName; } if (p.id !== meId) { delete q.morador; delete q.cadastrado; delete q.caixinha; } delete q.fails; delete q.lockUntil; return q; });
+    const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.age; delete q.pin; if (p.id !== meId) { delete q.phone; delete q.cpf; delete q.fullName; } if (p.id !== meId) { delete q.morador; delete q.cadastrado; delete q.caixinha; delete q.caixinhaAte; } delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => (!b.private || priv) && b.pid === meId); // cada um só recebe a própria suspensão
     delete settings.moradores;

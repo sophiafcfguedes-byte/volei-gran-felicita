@@ -590,7 +590,7 @@ function renderLista() {
   const pagOf = pid => ((RAW.pag || {})[mk] || {})[pid];
   function myCaixinha() {
     const p = me && P(me);
-    if (!p || isAdmin || !LG.pagaVaquinha(p)) return '';
+    if (!p || isAdmin || !LG.pagaVaquinha(p, mk)) return '';
     const g = pagOf(me), st = g ? g.st : 'falta';
     if (st === 'ok') return `<div class="card"><div class="sec-h"><h2>Vaquinha de ${mesNome}</h2><span class="ac-st ac-ok">Pago</span></div><button type="button" class="pix-copy" data-copypix="637b5fdd-3f6e-42f9-ae1e-fb2e547281b2"><span class="pix-l">Chave Pix (toque para copiar)</span><span class="pix-k">637b5fdd-3f6e-42f9-ae1e-fb2e547281b2</span></button></div>`;
     return `<div class="card"><div class="sec-h"><h2>Vaquinha de ${mesNome}</h2><span class="ac-st ${PST[st][1]}">${PST[st][0]}</span></div>
@@ -811,7 +811,7 @@ function renderMais() {
         <div class="ctrls"><select data-edit="${q.id}" data-field="gender" aria-label="Gênero de ${h(q.name)}">${opts(GENDERS, q.gender)}</select>
           <select data-edit="${q.id}" data-field="skill" aria-label="Nível de ${h(q.name)}">${opts(SKILLS, q.skill)}</select>
           <select data-edit="${q.id}" data-field="age" aria-label="Faixa etária de ${h(q.name)}">${opts(AGES, q.age || 0)}</select>
-          ${q.guest || q.morador || q.fixed ? '' : `<button class="tog setter" aria-pressed="${!!q.caixinha}" data-caixinha="${q.id}" title="Marcado: já pagou, check-in liberado sem comprovante">vaquinha</button>`}
+          ${q.guest || q.morador || q.fixed ? '' : `<button class="tog setter" aria-pressed="${!!q.caixinha}" data-caixinha="${q.id}" title="Marcado: já pagou, check-in liberado sem comprovante">vaquinha</button>${q.caixinha ? `<label class="by" style="display:inline-flex;gap:4px;align-items:center">desliga em <input type="month" data-vqate="${q.id}" value="${h(q.caixinhaAte || '')}" style="min-height:30px;padding:2px 6px"></label>` : ''}`}
           ${q.guest ? '' : `<button class="tog setter" aria-pressed="${!!q.fixed}" data-fixed="${q.id}">comissão</button><button class="tog setter" aria-pressed="${!!q.priv}" data-priv="${q.id}" title="Vê e faz check-in nos jogos fechados">${ICON.ball}${h(privLabel())}</button>`}
           <button class="btn btn-danger btn-sm" data-del="${q.id}" data-confirm>Excluir</button></div>
         ${q.guest ? '' : `<div class="pinrow"><span class="by">Senha:</span> <b class="pin">${q.pin ? h(q.pin) : '<span class="rem">sem senha</span>'}</b> <button class="link" data-newpin="${q.id}">${q.pin ? 'Trocar' : 'Gerar'}</button></div>
@@ -990,6 +990,7 @@ document.addEventListener('click', async e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.toggle) { const on = t.checked; t.checked = !on; return setIn(t.dataset.toggle, on); }
+  if (t.dataset.vqate) return act({ type: 'vaquinhaAte', id: t.dataset.vqate, month: t.value }, t.value ? 'Vaquinha desliga em ' + t.value.split('-').reverse().join('/') + '.' : 'Vaquinha sem data pra desligar.');
   if (t.dataset.phone) return act({ type: 'setPhone', id: t.dataset.phone, phone: t.value }, 'Celular salvo.');
   if (t.dataset.edit) { const q = P(t.dataset.edit); if (!q) return; return act(Object.assign({ type: 'savePlayer' }, q, { [t.dataset.field]: t.value }), 'Salvo.'); }
   if (t.id === 'photo-in' && t.files && t.files[0]) return uploadPhoto(t.files[0]);
