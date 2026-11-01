@@ -11,7 +11,7 @@
   const SETTINGS_VERSION = 7;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
@@ -533,6 +533,16 @@
         return ok;
       }
       case 'vaquinhaAte': { const p = pm[a.id]; if (p && !p.guest) p.caixinhaAte = /^\d{4}-\d{2}$/.test(a.month || '') ? a.month : ''; return ok; }
+      case 'caixaAdd': {
+        const desc = String(a.desc || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+        const raw = String(a.valor || '').replace(/[^\d,.]/g, ''); const v = Math.round(Number(raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw) * 100) / 100;
+        if (desc.length < 2) return fail('Escreva com o que foi.');
+        if (!(v > 0)) return fail('Valor inválido.');
+        s.caixa ||= {}; s.caixa.lanc ||= [];
+        s.caixa.lanc.unshift({ id: newId(s, 'x'), ts: now, desc, valor: a.tipo === 'entrada' ? v : -v });
+        return ok;
+      }
+      case 'caixaDel': { if (s.caixa && s.caixa.lanc) s.caixa.lanc = s.caixa.lanc.filter(x => x.id !== a.id); return ok; }
       case 'toggleCaixinha': { const p = pm[a.id]; if (p && !p.guest) p.caixinha = !p.caixinha; return ok; } /* marcado = liberado (já pagou adiantado) */
       case 'punir': {
         /* Impedido de jogar o próximo jogo (segunda/quinta) por falta. */
@@ -744,8 +754,18 @@
     return out;
   }
 
+  /* Caixinha: saldo inicial + R$ 5 por comprovante aprovado (a partir de 1º/11/2026) + entradas − gastos lançados pelos admins. */
+  const CAIXA_INICIAL = 65.07, CAIXA_DESDE = Date.parse('2026-11-01T00:00:00-03:00'), VALOR_VAQUINHA = 5;
+  function caixaView(s) {
+    let n = 0;
+    for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && (e.ts || 0) >= CAIXA_DESDE) n++;
+    const lanc = ((s.caixa || {}).lanc || []).map(x => ({ id: x.id, ts: x.ts, desc: x.desc, valor: x.valor }));
+    const soma = lanc.reduce((t, x) => t + x.valor, 0);
+    return { inicial: CAIXA_INICIAL, comprovantes: n, entradaVaquinha: n * VALOR_VAQUINHA, lanc, saldo: Math.round((CAIXA_INICIAL + n * VALOR_VAQUINHA + soma) * 100) / 100 };
+  }
+
   function publicState(s, isAdmin, meId) {
-    if (isAdmin) return Object.assign({}, s, { portaria: portaria(s, s.games), agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
+    if (isAdmin) return Object.assign({}, s, { caixaV: caixaView(s), portaria: portaria(s, s.games), agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
     const me = s.players.find(p => p.id === meId);
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
@@ -754,7 +774,7 @@
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => (!b.private || priv) && b.pid === meId); // cada um só recebe a própria suspensão
     delete settings.moradores;
-    return Object.assign({}, s, { players, games, settings, bans, pag: (() => { const o = {}; for (const [mk, m] of Object.entries(s.pag || {})) if (m[meId]) o[mk] = { [meId]: { st: m[meId].st, why: m[meId].why || '', ts: m[meId].ts } }; return o; })(), suggestions: [], reservas: undefined, portaria: portaria(s, games), acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
+    return Object.assign({}, s, { players, games, settings, bans, pag: (() => { const o = {}; for (const [mk, m] of Object.entries(s.pag || {})) if (m[meId]) o[mk] = { [meId]: { st: m[meId].st, why: m[meId].why || '', ts: m[meId].ts } }; return o; })(), suggestions: [], caixaV: caixaView(s), pagGuests: undefined, caixa: undefined, reservas: undefined, portaria: portaria(s, games), acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
   }
 
   /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */

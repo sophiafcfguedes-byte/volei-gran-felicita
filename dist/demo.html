@@ -242,6 +242,8 @@ details summary { cursor: pointer; font-weight: 700; }
 .pix-copy { display: block; width: 100%; text-align: left; margin: 10px 0; padding: 12px 14px; border-radius: 12px; border: 1.5px dashed #940B29; background: rgba(148,11,41,.06); color: inherit; font: inherit; cursor: pointer; }
 .pix-copy .pix-l { display: block; font-size: .8rem; font-weight: 700; color: #940B29; }
 .pix-copy .pix-k { display: block; font-family: ui-monospace, Menlo, monospace; font-size: .9rem; word-break: break-all; margin-top: 2px; }
+.cx-saldo { display: flex; flex-direction: column; gap: 2px; margin: 6px 0 10px; }
+.cx-saldo b { font-family: 'Alfa Slab One', Georgia, serif; font-weight: 400; font-size: 2.2rem; color: #1f9d55; }
 .pay-warn { position: relative; margin: 12px 0 4px; padding: 10px 12px; border-radius: 12px; background: #fff; color: #c62828; font-weight: 900; font-size: .95rem; letter-spacing: .3px; text-align: center; line-height: 1.3; }
 .ci-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
 .ci-btns .btn { min-height: 56px; font-size: 1.1rem; font-weight: 800; color: #fff; border: 0; }
@@ -278,7 +280,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
 </div>
 <nav class="tabs" aria-label="Seções"><div class="tabs-in" id="tabs">
   <button data-tab="lista"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/></svg>Lista</button>
-  <button data-tab="times"><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>Times</button>
+  <button data-tab="caixinha"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M3 11h18M16 15h2M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/></svg>Caixinha</button>
   <button data-tab="reservas"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Reservas</button>
   <button data-tab="portaria"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 4.5 3.4 8.4 8 9 4.6-.6 8-4.5 8-9V7l-8-4Z"/><path d="m9 12 2 2 4-4"/></svg>Portaria</button>
   <button data-tab="mais"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>Perfil</button>
@@ -300,7 +302,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   const SETTINGS_VERSION = 7;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
@@ -822,6 +824,16 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         return ok;
       }
       case 'vaquinhaAte': { const p = pm[a.id]; if (p && !p.guest) p.caixinhaAte = /^\d{4}-\d{2}$/.test(a.month || '') ? a.month : ''; return ok; }
+      case 'caixaAdd': {
+        const desc = String(a.desc || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+        const raw = String(a.valor || '').replace(/[^\d,.]/g, ''); const v = Math.round(Number(raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw) * 100) / 100;
+        if (desc.length < 2) return fail('Escreva com o que foi.');
+        if (!(v > 0)) return fail('Valor inválido.');
+        s.caixa ||= {}; s.caixa.lanc ||= [];
+        s.caixa.lanc.unshift({ id: newId(s, 'x'), ts: now, desc, valor: a.tipo === 'entrada' ? v : -v });
+        return ok;
+      }
+      case 'caixaDel': { if (s.caixa && s.caixa.lanc) s.caixa.lanc = s.caixa.lanc.filter(x => x.id !== a.id); return ok; }
       case 'toggleCaixinha': { const p = pm[a.id]; if (p && !p.guest) p.caixinha = !p.caixinha; return ok; } /* marcado = liberado (já pagou adiantado) */
       case 'punir': {
         /* Impedido de jogar o próximo jogo (segunda/quinta) por falta. */
@@ -1033,8 +1045,18 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     return out;
   }
 
+  /* Caixinha: saldo inicial + R$ 5 por comprovante aprovado (a partir de 1º/11/2026) + entradas − gastos lançados pelos admins. */
+  const CAIXA_INICIAL = 65.07, CAIXA_DESDE = Date.parse('2026-11-01T00:00:00-03:00'), VALOR_VAQUINHA = 5;
+  function caixaView(s) {
+    let n = 0;
+    for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && (e.ts || 0) >= CAIXA_DESDE) n++;
+    const lanc = ((s.caixa || {}).lanc || []).map(x => ({ id: x.id, ts: x.ts, desc: x.desc, valor: x.valor }));
+    const soma = lanc.reduce((t, x) => t + x.valor, 0);
+    return { inicial: CAIXA_INICIAL, comprovantes: n, entradaVaquinha: n * VALOR_VAQUINHA, lanc, saldo: Math.round((CAIXA_INICIAL + n * VALOR_VAQUINHA + soma) * 100) / 100 };
+  }
+
   function publicState(s, isAdmin, meId) {
-    if (isAdmin) return Object.assign({}, s, { portaria: portaria(s, s.games), agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
+    if (isAdmin) return Object.assign({}, s, { caixaV: caixaView(s), portaria: portaria(s, s.games), agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
     const me = s.players.find(p => p.id === meId);
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
@@ -1043,7 +1065,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => (!b.private || priv) && b.pid === meId); // cada um só recebe a própria suspensão
     delete settings.moradores;
-    return Object.assign({}, s, { players, games, settings, bans, pag: (() => { const o = {}; for (const [mk, m] of Object.entries(s.pag || {})) if (m[meId]) o[mk] = { [meId]: { st: m[meId].st, why: m[meId].why || '', ts: m[meId].ts } }; return o; })(), suggestions: [], reservas: undefined, portaria: portaria(s, games), acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
+    return Object.assign({}, s, { players, games, settings, bans, pag: (() => { const o = {}; for (const [mk, m] of Object.entries(s.pag || {})) if (m[meId]) o[mk] = { [meId]: { st: m[meId].st, why: m[meId].why || '', ts: m[meId].ts } }; return o; })(), suggestions: [], caixaV: caixaView(s), pagGuests: undefined, caixa: undefined, reservas: undefined, portaria: portaria(s, games), acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
   }
 
   /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */
@@ -1134,7 +1156,7 @@ const ICON = {
 };
 
 let S = null, D = null, version = null, isAdmin = false, mode = 'server', skew = 0;
-let me = store.get('me', null), tab = ['lista','times','reservas','portaria','mais'].includes(store.get('tab', 'lista')) ? store.get('tab', 'lista') : 'lista', token = store.get('token', null), auth = store.get('auth', null);
+let me = store.get('me', null), tab = ['lista','caixinha','reservas','portaria','mais'].includes(store.get('tab', 'lista')) ? store.get('tab', 'lista') : 'lista', token = store.get('token', null), auth = store.get('auth', null);
 function logoutPlayer() { me = null; auth = null; store.set('me', null); store.set('auth', null); }
 const hostTheme = document.documentElement.getAttribute('data-theme');
 const now = () => Date.now() + skew;
@@ -1276,7 +1298,7 @@ function render() {
   document.querySelectorAll('#main input[id], #main select[id], #main textarea[id]').forEach(el => { if (el.type !== 'checkbox' && el.type !== 'file') keep[el.id] = el.value; });
   const focusId = document.activeElement && document.activeElement.id;
   $('#hdr').innerHTML = renderHeader();
-  $('#main').innerHTML = ({ lista: renderLista, times: renderTimes, reservas: renderReservas, portaria: renderPortaria, mais: renderMais }[tab] || renderLista)();
+  $('#main').innerHTML = ({ lista: renderLista, caixinha: renderCaixinha, reservas: renderReservas, portaria: renderPortaria, mais: renderMais }[tab] || renderLista)();
   const pb = document.querySelector('#tabs [data-tab=portaria]'); if (pb) pb.hidden = false;
   for (const id in keep) { const el = document.getElementById(id); if (el) el.value = keep[id]; }
   if (focusId) { const el = document.getElementById(focusId); if (el && el.focus) el.focus({ preventScroll: true }); }
@@ -1484,7 +1506,25 @@ function renderLista() {
       const who = l.by && P(l.by) ? h(P(l.by).name) : l.byName ? h(l.byName) : 'Admin';
       const nm = P(l.pid) ? nameOf(P(l.pid)) : (l.name || '—');
       const what = l.act === 'add' ? `<span class="add">marcou</span> ${h(nm)}` : l.act === 'remove' ? `<span class="rem">tirou</span> ${h(nm)}` : 'sorteou os times';
-      return `<li><time>${fmtTime(l.ts)}</time><span>${who} ${what}</span></li>`; }).join('')}</ul></div>` : ''}`;
+      return `<li><time>${fmtTime(l.ts)}</time><span>${who} ${what}</span></li>`; }).join('')}</ul></div>` : ''}
+    ${renderTimes()}`;
+}
+
+function renderCaixinha() {
+  const C = RAW.caixaV || { saldo: 0, lanc: [], comprovantes: 0, entradaVaquinha: 0, inicial: 0 };
+  const brl = v => (v < 0 ? '− ' : '') + 'R$ ' + Math.abs(v).toFixed(2).replace('.', ',');
+  const dm = ts => { const d = new Date(ts - 3 * 3600e3); return `${d.getUTCDate()}/${d.getUTCMonth() + 1}`; };
+  return `<div class="card"><h2>Caixinha</h2>
+      <div class="cx-saldo"><span class="by">Saldo em caixa</span><b>${brl(C.saldo)}</b></div>
+      <p class="hint">Soma sozinha R$ 5,00 a cada comprovante da vaquinha aprovado.${C.comprovantes ? ` Neste período: ${C.comprovantes} comprovante${C.comprovantes > 1 ? 's' : ''} (${brl(C.entradaVaquinha)}).` : ''}</p></div>
+    ${isAdmin ? `<div class="card"><h2>Lançar gasto ou entrada</h2>
+      <div class="field"><label for="cx-desc">Com o que foi</label><input type="text" id="cx-desc" maxlength="80" placeholder="Ex.: bola nova"></div>
+      <div class="grid2"><div class="field"><label for="cx-val">Valor (R$)</label><input type="text" id="cx-val" inputmode="decimal" placeholder="0,00"></div>
+      <div class="field"><label for="cx-tipo">Tipo</label><select id="cx-tipo"><option value="gasto">Gasto</option><option value="entrada">Entrada</option></select></div></div>
+      <button class="btn btn-primary" data-act="caixa-add">Lançar</button></div>` : ''}
+    <div class="card"><h2>Movimentações</h2>
+      ${C.lanc.length ? C.lanc.map(x => `<div class="res-row"><span class="hr" style="min-width:48px">${dm(x.ts)}</span><span class="nm" style="flex:1">${h(x.desc)}</span><b style="color:${x.valor < 0 ? '#c62828' : '#1f9d55'}">${brl(x.valor)}</b>${isAdmin ? `<button class="link" data-cxdel="${x.id}" data-confirm style="color:#940B29">apagar</button>` : ''}</div>`).join('') : '<p class="hint">Nenhum gasto lançado ainda.</p>'}
+    </div>`;
 }
 
 function renderTimes() {
@@ -1756,6 +1796,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.paid) return act({ type: 'togglePaid', id: t.dataset.paid });
   if (t.dataset.pick) { const i = document.getElementById('pun-name'); i.value = t.dataset.pick; document.getElementById('pun-sug').innerHTML = ''; return; }
   if (t.dataset.copypix) { const k = t.dataset.copypix; const done = () => toast('Chave Pix copiada!'); if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(k).then(done, () => { prompt('Copie a chave Pix:', k); }); else { const ta = document.createElement('textarea'); ta.value = k; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} ta.remove(); } return; }
+  if (t.dataset.cxdel) return act({ type: 'caixaDel', id: t.dataset.cxdel }, 'Apagado.');
   if (t.dataset.caixinha) return act({ type: 'toggleCaixinha', id: t.dataset.caixinha });
   if (t.dataset.pagok) return act({ type: 'pagAprovar', pid: t.dataset.pagok, month: LG.monthKey(S.current ? S.current.startAt : now()) }, 'Pagamento aprovado.');
   if (t.dataset.pagno) return act({ type: 'pagRecusar', pid: t.dataset.pagno, month: LG.monthKey(S.current ? S.current.startAt : now()), why: 'Comprovante recusado pela comissão. Anexe outro.' }, 'Comprovante recusado.');
@@ -1778,6 +1819,7 @@ document.addEventListener('click', async e => {
       return;
     }
     case 'punir': return act({ type: 'punir', name: val('pun-name') }, 'Pronto: impedido no próximo jogo.', ['pun-name']);
+    case 'caixa-add': return act({ type: 'caixaAdd', desc: val('cx-desc'), valor: val('cx-val'), tipo: val('cx-tipo') }, 'Lançado.', ['cx-desc', 'cx-val']);
     case 'checkin': return setIn(me, true);
     case 'desistir': return setIn(me, false);
     case 'acesso-now': return act({ type: 'acessoNow', game: S.current && S.current.id }, 'Pedido enviado: em até 1 minuto libera no Vida de Síndico.');
