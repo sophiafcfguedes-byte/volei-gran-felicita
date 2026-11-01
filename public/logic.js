@@ -280,8 +280,9 @@
   /* Caixinha: mês no formato AAAA-MM (horário de Brasília). */
   const monthKey = ts => { const p = spParts(ts); return p.y + '-' + String(p.m + 1).padStart(2, '0'); };
   /* Quem precisa pagar a vaquinha: a partir de VAQUINHA_DESDE; moradores, comissão e quem tem vaquinha marcada não pagam. */
-  const VAQUINHA_DESDE = '2026-11-05';
-  const devePagarVaquinha = (p, meta) => !!p && !p.guest && !p.morador && !p.fixed && !p.caixinha && !!meta && meta.id >= VAQUINHA_DESDE;
+  const VAQUINHA_DESDE = '2026-11-04';
+  const pagaVaquinha = p => !!p && !p.guest && !p.morador && !p.fixed && !p.caixinha;
+  const devePagarVaquinha = (p, meta) => pagaVaquinha(p) && !!meta && meta.id >= VAQUINHA_DESDE;
   const pagou = (s, pid, mk) => !!(s.pag && s.pag[mk] && s.pag[mk][pid] && s.pag[mk][pid].st === 'ok');
   const cpfOk = d => {
     if (!/^\d{11}$/.test(d) || /^(\d)\1{10}$/.test(d)) return false;
@@ -810,5 +811,5 @@
     return { games: out };
   }
 
-  return { devePagarVaquinha, monthKey, teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  return { pagaVaquinha, devePagarVaquinha, monthKey, teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });
