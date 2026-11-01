@@ -164,7 +164,8 @@ http.createServer(async (req, res) => {
       const ext = /pdf/.test(a.type || '') ? 'pdf' : /png/.test(a.type || '') ? 'png' : 'jpg';
       const buf = Buffer.from(String(a.data || '').replace(/^data:[^,]*,/, ''), 'base64');
       if (buf.length < 500 || buf.length > 6e6) return send(res, 200, { ok: false, error: 'Arquivo inválido ou grande demais (máx. 6 MB).' });
-      const now = Date.now(), mk = L.monthKey(now), [y, m] = mk.split('-').map(Number);
+      const now = Date.now(), cur = L.monthKey(now), nxt = L.monthKey(now + 20 * 864e5);
+      const mk = [cur, nxt].includes(a.month) ? a.month : cur, [y, m] = mk.split('-').map(Number); /* mês do jogo (pode ser o próximo, no fim do mês) */
       fs.mkdirSync(path.join(UPLOADS, mk), { recursive: true });
       const file = path.join(UPLOADS, mk, pid + '.' + ext);
       for (const e of ['pdf', 'png', 'jpg']) { try { fs.unlinkSync(path.join(UPLOADS, mk, pid + '.' + e)); } catch (er) {} }

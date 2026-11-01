@@ -458,7 +458,7 @@ function render() {
 function devePagar() {
   const p = me && P(me);
   if (!p || p.guest || p.caixinha || isAdmin) return false;
-  const g = ((RAW.pag || {})[LG.monthKey(now())] || {})[me];
+  const g = ((RAW.pag || {})[LG.monthKey(S.current ? S.current.startAt : now())] || {})[me];
   return !(g && g.st === 'ok');
 }
 
@@ -495,7 +495,7 @@ async function uploadComprovante(f) {
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       data = c.toDataURL('image/jpeg', 0.88); type = 'image/jpeg';
     }
-    const r = await fetch('api/comprovante', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by: me, auth, type, data }) }).then(x => x.json());
+    const r = await fetch('api/comprovante', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by: me, auth, type, data, month: LG.monthKey(S.current ? S.current.startAt : now()) }) }).then(x => x.json());
     if (r.authFail) { toast(r.error, true); return openWho(); }
     if (!r.ok) return toast(r.error || 'Não consegui enviar.', true);
     if (r.state) applyPayload(r);
@@ -555,7 +555,7 @@ function renderLista() {
   else if (lk.locked && !isAdmin) lockMsg = `<div class="notice">A lista está fechada agora. Só quem é admin consegue mexer.</div>`;
   const prio = false;
   const MESN = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-  const mk = LG.monthKey(now()), mesNome = MESN[Number(mk.slice(5)) - 1];
+  const mk = LG.monthKey(S.current ? S.current.startAt : now()), mesNome = MESN[Number(mk.slice(5)) - 1];
   const PST = { ok: ['Pago', 'ac-ok'], pendente: ['Em análise', 'ac-cad'], recusado: ['Recusado', 'ac-err'], falta: ['Não pagou', 'ac-err'], isento: ['Liberado', 'ac-mor'] };
   const pagOf = pid => ((RAW.pag || {})[mk] || {})[pid];
   function myCaixinha() {
@@ -895,9 +895,9 @@ document.addEventListener('click', async e => {
   if (t.dataset.paid) return act({ type: 'togglePaid', id: t.dataset.paid });
   if (t.dataset.pick) { const i = document.getElementById('pun-name'); i.value = t.dataset.pick; document.getElementById('pun-sug').innerHTML = ''; return; }
   if (t.dataset.caixinha) return act({ type: 'toggleCaixinha', id: t.dataset.caixinha });
-  if (t.dataset.pagok) return act({ type: 'pagAprovar', pid: t.dataset.pagok, month: LG.monthKey(now()) }, 'Pagamento aprovado.');
-  if (t.dataset.pagno) return act({ type: 'pagRecusar', pid: t.dataset.pagno, month: LG.monthKey(now()), why: 'Comprovante recusado pela comissão. Anexe outro.' }, 'Comprovante recusado.');
-  if (t.dataset.vercx) { const w = window.open('', '_blank'); fetch('api/comprovante?month=' + LG.monthKey(now()) + '&pid=' + encodeURIComponent(t.dataset.vercx), { headers: { 'x-admin-token': token } }).then(r => r.ok ? r.blob() : Promise.reject()).then(b => { const u = URL.createObjectURL(b); if (w) w.location = u; else location.href = u; }).catch(() => { if (w) w.close(); toast('Não achei o comprovante.', true); }); return; }
+  if (t.dataset.pagok) return act({ type: 'pagAprovar', pid: t.dataset.pagok, month: LG.monthKey(S.current ? S.current.startAt : now()) }, 'Pagamento aprovado.');
+  if (t.dataset.pagno) return act({ type: 'pagRecusar', pid: t.dataset.pagno, month: LG.monthKey(S.current ? S.current.startAt : now()), why: 'Comprovante recusado pela comissão. Anexe outro.' }, 'Comprovante recusado.');
+  if (t.dataset.vercx) { const w = window.open('', '_blank'); fetch('api/comprovante?month=' + LG.monthKey(S.current ? S.current.startAt : now()) + '&pid=' + encodeURIComponent(t.dataset.vercx), { headers: { 'x-admin-token': token } }).then(r => r.ok ? r.blob() : Promise.reject()).then(b => { const u = URL.createObjectURL(b); if (w) w.location = u; else location.href = u; }).catch(() => { if (w) w.close(); toast('Não achei o comprovante.', true); }); return; }
   if (t.dataset.unguest) return act({ type: 'leave', pid: t.dataset.unguest }, 'Convidado removido.');
   if (t.dataset.morador) return act({ type: 'toggleMorador', id: t.dataset.morador });
   if (t.dataset.cadastrado) return act({ type: 'toggleCadastrado', id: t.dataset.cadastrado });
