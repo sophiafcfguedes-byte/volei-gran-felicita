@@ -239,6 +239,9 @@ details summary { cursor: pointer; font-weight: 700; }
 #tabs button[hidden] { display: none; }
 .pun-sug { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .pun-sug button { border: 1px solid rgba(127,127,127,.35); background: transparent; color: inherit; border-radius: 99px; padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+.pix-copy { display: block; width: 100%; text-align: left; margin: 10px 0; padding: 12px 14px; border-radius: 12px; border: 1.5px dashed #940B29; background: rgba(148,11,41,.06); color: inherit; font: inherit; cursor: pointer; }
+.pix-copy .pix-l { display: block; font-size: .8rem; font-weight: 700; color: #940B29; }
+.pix-copy .pix-k { display: block; font-family: ui-monospace, Menlo, monospace; font-size: .9rem; word-break: break-all; margin-top: 2px; }
 .pay-warn { position: relative; margin: 12px 0 4px; padding: 10px 12px; border-radius: 12px; background: #fff; color: #c62828; font-weight: 900; font-size: .95rem; letter-spacing: .3px; text-align: center; line-height: 1.3; }
 .ci-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
 .ci-btns .btn { min-height: 56px; font-size: 1.1rem; font-weight: 800; color: #fff; border: 0; }
@@ -1379,8 +1382,9 @@ function renderLista() {
     const p = me && P(me);
     if (!p || isAdmin || !LG.pagaVaquinha(p)) return '';
     const g = pagOf(me), st = g ? g.st : 'falta';
-    if (st === 'ok') return `<div class="card"><div class="sec-h"><h2>Vaquinha de ${mesNome}</h2><span class="ac-st ac-ok">Pago</span></div></div>`;
+    if (st === 'ok') return `<div class="card"><div class="sec-h"><h2>Vaquinha de ${mesNome}</h2><span class="ac-st ac-ok">Pago</span></div><button type="button" class="pix-copy" data-copypix="637b5fdd-3f6e-42f9-ae1e-fb2e547281b2"><span class="pix-l">Chave Pix (toque para copiar)</span><span class="pix-k">637b5fdd-3f6e-42f9-ae1e-fb2e547281b2</span></button></div>`;
     return `<div class="card"><div class="sec-h"><h2>Vaquinha de ${mesNome}</h2><span class="ac-st ${PST[st][1]}">${PST[st][0]}</span></div>
+      <button type="button" class="pix-copy" data-copypix="637b5fdd-3f6e-42f9-ae1e-fb2e547281b2"><span class="pix-l">Chave Pix (toque para copiar)</span><span class="pix-k">637b5fdd-3f6e-42f9-ae1e-fb2e547281b2</span></button>
       <p class="hint">${st === 'falta' ? `Para fazer check-in este mês, anexe o comprovante de pagamento de <b>R$ 5,00</b> (com a data de ${mesNome} e o seu nome). Vale o mês inteiro.` : h(g.why || '')}</p>
       <label class="btn btn-primary" for="cx-file">${st === 'falta' ? 'Anexar comprovante' : 'Anexar outro comprovante'}</label><input type="file" id="cx-file" accept="image/*,application/pdf" hidden></div>`;
   }
@@ -1712,6 +1716,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.unban) return act({ type: 'unban', pid: t.dataset.unban, game: t.dataset.ugame }, 'Liberado.');
   if (t.dataset.paid) return act({ type: 'togglePaid', id: t.dataset.paid });
   if (t.dataset.pick) { const i = document.getElementById('pun-name'); i.value = t.dataset.pick; document.getElementById('pun-sug').innerHTML = ''; return; }
+  if (t.dataset.copypix) { const k = t.dataset.copypix; const done = () => toast('Chave Pix copiada!'); if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(k).then(done, () => { prompt('Copie a chave Pix:', k); }); else { const ta = document.createElement('textarea'); ta.value = k; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} ta.remove(); } return; }
   if (t.dataset.caixinha) return act({ type: 'toggleCaixinha', id: t.dataset.caixinha });
   if (t.dataset.pagok) return act({ type: 'pagAprovar', pid: t.dataset.pagok, month: LG.monthKey(S.current ? S.current.startAt : now()) }, 'Pagamento aprovado.');
   if (t.dataset.pagno) return act({ type: 'pagRecusar', pid: t.dataset.pagno, month: LG.monthKey(S.current ? S.current.startAt : now()), why: 'Comprovante recusado pela comissão. Anexe outro.' }, 'Comprovante recusado.');
