@@ -539,7 +539,8 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
        Se não tiver pra todos, os que tem são espalhados e o resto é equilibrado normal. */
     if (!(v.meta && v.meta.private)) {
       for (const want of [x => x.sk >= 7, x => x.sk <= 2]) {
-        const pool = shuffle(order.filter(x => !x.lock && want(x)), rand);
+        /* O mais forte do grupo vai pro time mais fraco até aqui (ex.: Iniciante N2 pro time que pegou o Muito bom N1). */
+        const pool = shuffle(order.filter(x => !x.lock && want(x)), rand).sort((a, b) => b.sk - a.sk);
         const ts = shuffle(T.slice(), rand).sort((a, b) => (b.cap - a.cap) || (a.sum - b.sum));
         let pi = 0; ts.forEach(t => { if (t.m.length >= t.cap) return; const x = pool[pi++]; if (x) { x.lock = true; put(t, x); } });
       }
@@ -557,8 +558,9 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       const a = T[Math.floor(rand() * T.length)], b = T[Math.floor(rand() * T.length)];
       if (a === b || !a.m.length || !b.m.length) continue;
       const i = Math.floor(rand() * a.m.length), x = a.m[i];
-      if (x.lock) continue;
-      const j = b.m.findIndex(y => !y.lock && y.g === x.g && y.ag === x.ag && y.st === x.st && y.sk !== x.sk);
+      /* Troca só entre "iguais": iniciante com iniciante, muito bom com muito bom (do mesmo gênero), o resto entre si. */
+      const cat = z => z.sk >= 7 ? 'mb' : z.sk <= 2 ? 'in' : 'md';
+      const j = b.m.findIndex(y => !!y.lock === !!x.lock && cat(y) === cat(x) && y.g === x.g && (x.lock || y.ag === x.ag) && y.st === x.st && y.sk !== x.sk);
       if (j < 0) continue;
       const y = b.m[j], before = spread();
       a.sum += y.sk - x.sk; b.sum += x.sk - y.sk;
