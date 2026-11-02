@@ -52,6 +52,8 @@ async function avisosTick() {
   const plain = (o) => o && typeof o === 'object' && !ArrayBuffer.isView(o) && !Array.isArray(o);
   if (!plain(state.avisos)) state.avisos = {};
   if (!plain(state.avisoMsgs)) state.avisoMsgs = {};
+  // Quem já foi marcado em cada jogo (por pessoa): nunca marca a mesma pessoa duas vezes no mesmo jogo.
+  if (!plain(state.tagged)) state.tagged = {};
   for (const g of data.games || []) {
     const groupId = rt[g.group]?.groupId;
     if (!groupId) continue;
@@ -65,7 +67,10 @@ async function avisosTick() {
     }
     const mentions = [];
     let text = g.text;
-    for (const p of newPromos) if (!p.again) text = tagLine(text, p, mentions); // já foi marcado antes neste jogo: só atualiza a lista
+    const tg = (state.tagged[g.id] ||= {});
+    // Quem já teve aviso enviado antes (versões antigas) conta como marcado.
+    for (const p of g.promos || []) if (state.avisos[p.key] && !newPromos.includes(p)) tg[p.pid] = 1;
+    for (const p of newPromos) { if (p.again || tg[p.pid]) continue; text = tagLine(text, p, mentions); tg[p.pid] = 1; }
     if (AVISOS.publicUrl) text += '\\n' + AVISOS.publicUrl;
     state.avisos[g.id] = Date.now();
     for (const p of newPromos) state.avisos[p.key] = Date.now();
@@ -100,7 +105,7 @@ async function avisosTick() {
     try { await sock.sendMessage(groupId, { text: g.teams.text }); try { await sock.sendPresenceUpdate('unavailable'); } catch (e) {} log('Times enviados (' + g.id + ').'); }
     catch (e) { logErr('Não consegui mandar os times:', e.message); }
   }
-  for (const k of Object.keys(state.avisos)) if (Date.now() - state.avisos[k] > 10 * 864e5) { delete state.avisos[k]; delete state.avisoMsgs[k]; }
+  for (const k of Object.keys(state.avisos)) if (Date.now() - state.avisos[k] > 10 * 864e5) { delete state.avisos[k]; delete state.avisoMsgs[k]; delete state.tagged[k]; }
 }
 setInterval(() => avisosTick().catch((e) => logErr('avisos:', e.message)), 30_000);
 // ---------- avisos do app (fim) ----------`;
