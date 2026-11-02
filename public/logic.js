@@ -823,7 +823,7 @@
         ...d.fixed.map(id => `⭐ ${nm(id)}`), ...d.regular.map((id, i) => `${i + 1}. ${nm(id)}`)];
       if (d.waitlist.length) lines.push('', '*Lista de espera*', ...d.waitlist.map((id, i) => `${i + 1}. ${nm(id)}`));
       lines.push('', `Quem desistir até as ${g.meta.cutoff} libera a vaga pra espera.`);
-      const who = id => pm[id] ? { pid: id, name: pm[id].name, phone: pm[id].phone || '', guest: !!pm[id].guest } : null;
+      const who = id => pm[id] ? { pid: id, name: pm[id].name, fullName: pm[id].fullName || '', phone: pm[id].phone || '', guest: !!pm[id].guest } : null;
       const promos = (g.promos || []).map(x => ({ key: g.meta.id + ':' + x.pid + ':' + x.ts, ...who(x.pid), by: x.by ? who(x.by) : null })).filter(x => x.pid);
       let teams = null;
       if (g.teams && g.teams.auto && g.teams.list.length) {
