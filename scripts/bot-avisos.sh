@@ -8,7 +8,7 @@ cp "$BOT" "$BOT.bak-$(date +%Y%m%d%H%M)"
 NODE="$(command -v node)"
 "$NODE" "$HOME/volei-gran-felicita/scripts/patch-bot.mjs" "$BOT"
 "$NODE" --check "$BOT"
-sudo systemctl enable volei-bot && sudo systemctl restart volei-bot
+if crontab -l 2>/dev/null | grep -q bot-demanda.js; then sudo systemctl restart volei-bot; else sudo systemctl enable volei-bot && sudo systemctl restart volei-bot; fi
 sleep 8
 sudo journalctl -u volei-bot --no-pager -n 12 | cut -c1-200
 echo "✅ Robô ligado: enquetes desligadas; manda a lista no grupo quando completar."
