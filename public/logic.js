@@ -8,7 +8,7 @@
   const DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
   const DAYS_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
   const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-  const SETTINGS_VERSION = 7;
+  const SETTINGS_VERSION = 8;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
     'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
@@ -132,6 +132,11 @@
       const map = { 1: 1, 2: 2, 3: 3, 4: 5, 5: 7 };
       s.players.forEach(p => { if (p.skill) p.skill = map[p.skill] || 3; });
     }
+    if (s.settings.v < 8) {
+      /* v8: nível vira nota de 0 a 5, de meio em meio (0 = iniciante, 5 = muito bom). */
+      const map = { 1: 0, 2: 0.5, 3: 1.5, 4: 2, 5: 3, 6: 3.5, 7: 4.5, 8: 5 };
+      s.players.forEach(p => { if (p.skill != null) p.skill = map[p.skill] != null ? map[p.skill] : 2.5; });
+    }
     s.settings.v = SETTINGS_VERSION;
     const today = (() => { const p = spParts(now); return isoDate(p.y, p.m, p.d); })();
     /* Suspensão acaba às 17h (horário-limite) do jogo em que a pessoa estava impedida: aí já pode marcar o próximo. */
@@ -231,9 +236,9 @@
     const capOf = i => six ? Math.min(6, Math.max(0, n - 6 * i)) : Math.ceil(n / k);
     const P = shuffle(ids.map(id => {
       const p = pm[id], r = v.roles[id] || {};
-      const sk0 = Number(p.skill) || 3;
+      const sk0 = p.skill != null && p.skill !== '' ? Number(p.skill) : 2.5;
       /* Gênero só pesa entre os Muito bom (N1/N2); nos outros níveis tanto faz homem ou mulher. */
-      return { id, g: sk0 >= 7 ? (p.gender === 'F' ? 'F' : 'M') : 'X', sk: sk0, st: !!r.setter, ag: Number(p.age) || 0 };
+      return { id, g: sk0 >= 4.5 ? (p.gender === 'F' ? 'F' : 'M') : 'X', sk: sk0, st: !!r.setter, ag: Number(p.age) || 0 };
     }), rand);
     const bySkill = arr => arr.sort((a, b) => b.sk - a.sk);
     const order = [
@@ -247,7 +252,7 @@
     /* Segunda/quinta: cada time leva obrigatoriamente 1 iniciante (N1/N2) e 1 muito bom (N1/N2).
        Se não tiver pra todos, os que tem são espalhados e o resto é equilibrado normal. */
     if (!(v.meta && v.meta.private)) {
-      for (const want of [x => x.sk >= 7, x => x.sk <= 2]) {
+      for (const want of [x => x.sk >= 4.5, x => x.sk <= 1]) {
         /* O mais forte do grupo vai pro time mais fraco até aqui (ex.: Iniciante N2 pro time que pegou o Muito bom N1). */
         const pool = shuffle(order.filter(x => !x.lock && want(x)), rand).sort((a, b) => b.sk - a.sk);
         const ts = shuffle(T.slice(), rand).sort((a, b) => (b.cap - a.cap) || (a.sum - b.sum));
@@ -268,7 +273,7 @@
       if (a === b || !a.m.length || !b.m.length) continue;
       const i = Math.floor(rand() * a.m.length), x = a.m[i];
       /* Troca só entre "iguais": iniciante com iniciante, muito bom com muito bom (do mesmo gênero), o resto entre si. */
-      const cat = z => z.sk >= 7 ? 'mb' : z.sk <= 2 ? 'in' : 'md';
+      const cat = z => z.sk >= 4.5 ? 'mb' : z.sk <= 1 ? 'in' : 'md';
       const j = b.m.findIndex(y => !!y.lock === !!x.lock && cat(y) === cat(x) && y.g === x.g && (x.lock || y.ag === x.ag) && y.st === x.st && y.sk !== x.sk);
       if (j < 0) continue;
       const y = b.m[j], before = spread();
@@ -305,7 +310,7 @@
   const normPin = v => String(v || '').replace(/\s+/g, '').toUpperCase();
   const fold = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
   const cleanName = v => String(v || '').replace(/\s+/g, ' ').trim().slice(0, 40);
-  const clampSkill = v => Math.min(8, Math.max(1, Math.round(Number(v) || 3)));
+  const clampSkill = v => { const n = Number(String(v == null ? '' : v).replace(',', '.')); return Number.isFinite(n) && String(v) !== '' ? Math.min(5, Math.max(0, Math.round(n * 2) / 2)) : 2.5; };
   const cleanTime = v => /^\d{2}:\d{2}$/.test(String(v)) ? String(v) : null;
 
   function apply(s, a, ctx) {
@@ -393,7 +398,7 @@
         let p = s.players.find(x => x.name.toLowerCase() === name.toLowerCase());
         if (p && !p.guest) return fail(`Já tem alguém chamado ${p.name}. Procure na lista, ou use um sobrenome.`);
         if (p) { p.guest = false; p.gender = a.gender; }
-        else { p = { id: newId(s, 'p'), name, gender: a.gender, skill: 3, paid: false, guest: false, fixed: false, priv: false, photo: null, freq: 0 }; s.players.push(p); }
+        else { p = { id: newId(s, 'p'), name, gender: a.gender, skill: 2.5, paid: false, guest: false, fixed: false, priv: false, photo: null, freq: 0 }; s.players.push(p); }
         return { ok: true, id: p.id };
       }
       case 'photo': {
@@ -420,11 +425,11 @@
         if (!lines.length) return fail('Cole pelo menos um nome.');
         let added = 0, skipped = 0;
         for (const line of lines) {
-          const m = line.replace(/^[-•*\d.)\s]+(?=\D)/, '').match(/^(.*?)(?:\s+([1-8]))?$/);
+          const m = line.replace(/^[-•*\d.)\s]+(?=\D)/, '').match(/^(.*?)(?:\s+([0-5](?:[.,]5)?))?$/);
           const name = cleanName(m ? m[1] : line);
           if (name.length < 2) continue;
           if (s.players.some(x => x.name.toLowerCase() === name.toLowerCase())) { skipped++; continue; }
-          s.players.push({ id: newId(s, 'p'), name, gender: a.gender, skill: m && m[2] ? Number(m[2]) : 3, paid: false, guest: false, fixed: false, priv: !!a.priv, photo: null, freq: 0 });
+          s.players.push({ id: newId(s, 'p'), name, gender: a.gender, skill: m && m[2] ? clampSkill(m[2]) : 2.5, paid: false, guest: false, fixed: false, priv: !!a.priv, photo: null, freq: 0 });
           added++;
         }
         return { ok: true, added, skipped };
