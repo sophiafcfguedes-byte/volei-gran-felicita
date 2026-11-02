@@ -327,11 +327,11 @@
       const r = gameAction(s, v, a, { now, admin, me, limit, pm, rand: ctx.rand });
       /* Quem saiu da espera e entrou na lista: o robô avisa no grupo. */
       if (r.ok && a.type === 'leave') {
-        /* Quem já foi avisado uma vez neste jogo não é marcado de novo (ex.: voltou pra espera e subiu outra vez). */
-        const up = derive(v).confirmed.filter(id => !before.includes(id) && id !== a.pid && !(v.promos || []).some(x => x.pid === id));
+        /* again: já tinha subido antes neste jogo — o robô atualiza a lista sem marcar de novo. */
+        const up = derive(v).confirmed.filter(id => !before.includes(id) && id !== a.pid );
         v.promos = (v.promos || []).concat(up.map(pid => {
           const pr = v.presences.find(x => x.pid === pid) || {};
-          return { pid, ts: now, by: pr.by && pr.by !== pid ? pr.by : null };
+          return { pid, ts: now, by: pr.by && pr.by !== pid ? pr.by : null, again: (v.promos || []).some(x => x.pid === pid) };
         })).slice(-60);
       }
       writeBack(s, a.game, v);
@@ -825,7 +825,7 @@
       if (d.waitlist.length) lines.push('', '*Lista de espera*', ...d.waitlist.map((id, i) => `${i + 1}. ${nm(id)}`));
       lines.push('', `Quem desistir até as ${g.meta.cutoff} libera a vaga pra espera.`);
       const who = id => pm[id] ? { pid: id, name: pm[id].name, fullName: pm[id].fullName || '', phone: pm[id].phone || '', guest: !!pm[id].guest } : null;
-      const promos = (g.promos || []).map(x => ({ key: g.meta.id + ':' + x.pid + ':' + x.ts, ...who(x.pid), by: x.by ? who(x.by) : null })).filter(x => x.pid);
+      const promos = (g.promos || []).map(x => ({ key: g.meta.id + ':' + x.pid + ':' + x.ts, ...who(x.pid), by: x.by ? who(x.by) : null, again: !!x.again })).filter(x => x.pid);
       let teams = null;
       if (g.teams && g.teams.auto && g.teams.list.length) {
         const tl = [`🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐`, '*Times sorteados*'];

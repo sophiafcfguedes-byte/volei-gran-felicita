@@ -65,7 +65,7 @@ async function avisosTick() {
     }
     const mentions = [];
     let text = g.text;
-    for (const p of newPromos) text = tagLine(text, p, mentions);
+    for (const p of newPromos) if (!p.again) text = tagLine(text, p, mentions); // já foi marcado antes neste jogo: só atualiza a lista
     if (AVISOS.publicUrl) text += '\\n' + AVISOS.publicUrl;
     state.avisos[g.id] = Date.now();
     for (const p of newPromos) state.avisos[p.key] = Date.now();
