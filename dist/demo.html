@@ -543,14 +543,26 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     ];
     const T = Array.from({ length: k }, (_, i) => ({ cap: capOf(i), m: [], sum: 0, st: 0, f: 0, mm: 0, ages: [0, 0, 0, 0, 0] })).filter(t => t.cap > 0);
     const put = (t, x) => { t.m.push(x); t.ages[x.ag]++; t.sum += x.sk; if (x.st) t.st++; if (x.g === 'F') t.f++; if (x.g === 'M') t.mm++; };
-    /* Segunda/quinta: cada time leva obrigatoriamente 1 iniciante (N1/N2) e 1 muito bom (N1/N2).
-       Se não tiver pra todos, os que tem são espalhados e o resto é equilibrado normal. */
+    /* Segunda/quinta:
+       1) o mais forte de cada time e o mais fraco de cada time em pares: o time do nota 5 leva o nota 0,
+          o do 4,5 leva o 0,5, e assim por diante (sempre o melhor que tiver com o mais fraco que tiver);
+       2) tenta 1 nota 4 e 1 nota 3 em cada time (no time mais fraco até ali);
+       3) o resto vai equilibrando pela soma. */
     if (!(v.meta && v.meta.private)) {
-      for (const want of [x => x.sk >= 4.5, x => x.sk <= 1]) {
-        /* O mais forte do grupo vai pro time mais fraco até aqui (ex.: Iniciante N2 pro time que pegou o Muito bom N1). */
-        const pool = shuffle(order.filter(x => !x.lock && want(x)), rand).sort((a, b) => b.sk - a.sk);
-        const ts = shuffle(T.slice(), rand).sort((a, b) => (b.cap - a.cap) || (a.sum - b.sum));
-        let pi = 0; ts.forEach(t => { if (t.m.length >= t.cap) return; const x = pool[pi++]; if (x) { x.lock = true; put(t, x); } });
+      const room = () => T.filter(t => t.m.length < t.cap);
+      const sorted = shuffle(order.slice(), rand).sort((a, b) => b.sk - a.sk);
+      const teams = shuffle(room(), rand).sort((a, b) => b.cap - a.cap);
+      const tops = sorted.slice(0, teams.length);
+      tops.forEach((x, i) => { x.lock = 'top'; put(teams[i], x); });
+      const bottoms = sorted.filter(x => !x.lock).reverse().slice(0, teams.length);
+      bottoms.forEach((x, i) => { if (teams[i].m.length < teams[i].cap) { x.lock = 'bot'; put(teams[i], x); } });
+      for (const nota of [4, 3]) {
+        const pool = shuffle(order.filter(x => !x.lock && x.sk === nota), rand);
+        for (const t of room().sort((a, b) => a.sum / a.cap - b.sum / b.cap)) {
+          if (t.m.some(y => y.sk === nota)) continue;
+          const x = pool.shift(); if (!x) break;
+          x.lock = 'mid'; put(t, x);
+        }
       }
     }
     for (const x of order) {
@@ -568,7 +580,8 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       const i = Math.floor(rand() * a.m.length), x = a.m[i];
       /* Troca só entre "iguais": iniciante com iniciante, muito bom com muito bom (do mesmo gênero), o resto entre si. */
       const cat = z => z.sk >= 4.5 ? 'mb' : z.sk <= 1 ? 'in' : 'md';
-      const j = b.m.findIndex(y => !!y.lock === !!x.lock && cat(y) === cat(x) && y.g === x.g && (x.lock || y.ag === x.ag) && y.st === x.st && y.sk !== x.sk);
+      if (x.lock) continue; /* os pares (melhor + mais fraco) e os nota 4/3 ficam onde foram colocados */
+      const j = b.m.findIndex(y => !y.lock && cat(y) === cat(x) && y.ag === x.ag && y.g === x.g && y.st === x.st && y.sk !== x.sk);
       if (j < 0) continue;
       const y = b.m[j], before = spread();
       a.sum += y.sk - x.sk; b.sum += x.sk - y.sk;
