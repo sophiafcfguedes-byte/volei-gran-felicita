@@ -249,6 +249,9 @@ details summary { cursor: pointer; font-weight: 700; }
 .ci-btns .btn { min-height: 56px; font-size: 1.1rem; font-weight: 800; color: #fff; border: 0; }
 .ci-in { background: #1f9d55; } .ci-out { background: #c62828; }
 .ci-btns .btn[disabled] { opacity: .35; }
+.ac-gray { background: rgba(111,111,111,.16); color: #555; } .ac-blue { background: rgba(21,101,192,.14); color: #1565C0; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+h3.sub { font-size: .95rem; margin: 14px 0 2px; color: var(--muted, #6F6F6F); }
 .ac-st { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
 .ac-ok { background: rgba(0,128,64,.14); color: #0a7a3e; } .ac-warn { background: rgba(210,169,90,.25); color: #7a5a12; } .ac-err { background: rgba(148,11,41,.14); color: #940B29; } .ac-mor { background: rgba(21,101,192,.14); color: #1565C0; } .ac-cad { background: rgba(240,190,30,.28); color: #7a5a00; }
 .res-day { margin: 14px 0 6px; font-weight: 800; font-size: 14px; color: var(--muted, #6F6F6F); text-transform: capitalize; }
@@ -719,25 +722,29 @@ function renderReservas() {
 
 function renderPortaria() {
   const g = S.current, A = (RAW.acessos || {})[g ? g.id : ''] || null, PT = (RAW.portaria || {})[g ? g.id : ''] || { st: {} };
-  const ST = { criada: ['Liberado', 'ac-ok'], ja: ['Liberado', 'ac-ok'], pronto: ['Libera às 17h', 'ac-ok'], morador: ['Morador', 'ac-mor'], cadastrado: ['Cadastrado', 'ac-cad'], convmorador: ['Convidado de morador', 'ac-mor'], semcpf: ['Sem CPF', 'ac-err'], erro: ['Erro', 'ac-err'] };
+  /* morador cinza · cadastrado amarelo · sem CPF vermelho · CPF ok azul · liberado verde (no dia do jogo) */
+  const ST = { morador: ['Morador', 'ac-gray'], convmorador: ['Convidado de morador', 'ac-gray'], cadastrado: ['Cadastrado', 'ac-cad'], semcpf: ['Sem CPF', 'ac-err'], pronto: ['CPF ok', 'ac-blue'], criada: ['Liberado', 'ac-ok'], ja: ['Liberado', 'ac-ok'], erro: ['Erro', 'ac-err'] };
   const hm = ts => { const d = new Date(ts - 3 * 3600e3); return `${d.getUTCDate()}/${d.getUTCMonth() + 1} às ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; };
   const D = LG.derive(S);
+  const own = q => q.morador ? 'morador' : q.cadastrado ? 'cadastrado' : q.cpf ? 'pronto' : 'semcpf';
+  const stOf = pid => PT.st[pid] || (P(pid) ? own(P(pid)) : 'semcpf');
   const badge = st => { const b = ST[st] || ST.semcpf; return `<span class="ac-st ${b[1]}">${b[0]}</span>`; };
-  const errMsg = pid => { const it = isAdmin && A && A.items.find(x => x.pid === pid); return it && it.msg ? `<p class="hint" style="color:#940B29">${h(it.msg)}</p>` : ''; };
-  let html = `<div class="card"><h2>Portaria · ${h(gameTitle())}</h2>
-      <p class="hint">Às 17h do dia do jogo, quem está confirmado e não é morador é liberado na portaria do condomínio só para aquele dia. ${PT.ts ? 'Última liberação: ' + hm(PT.ts) + '.' : ''}${isAdmin ? '' : ' Sem CPF? Preencha em Perfil → Entrada no condomínio.'}</p>
-      ${D.confirmed.map(pid => `<div class="res-row"><span class="nm">${h(nameOf(P(pid)))}</span>${badge(PT.st[pid])}</div>${errMsg(pid)}`).join('') || '<p class="hint">Ninguém confirmado ainda.</p>'}
-      ${isAdmin ? '<button class="btn btn-ghost" data-act="acesso-now" style="margin-top:12px">Liberar agora (lista atual)</button>' : ''}</div>`;
-  if (!isAdmin) return html;
-  const regs = S.players.filter(p => !p.guest).slice().sort(byName);
-  return html + `
-    <div class="card"><h2>Cadastro pra portaria</h2>
-      <p class="hint">Marque quem é <b>morador</b> ou quem já está <b>cadastrado</b> na portaria (esses não precisam de liberação). Os outros preenchem nome completo e CPF em Perfil → Entrada no condomínio, ou você preenche aqui.</p>
-      ${regs.map(q => `<details class="res-row" style="display:block"><summary style="display:flex;gap:10px;align-items:center;cursor:pointer"><span class="nm" style="flex:1">${h(q.name)}</span>${q.morador ? '<span class="ac-st ac-mor">Morador</span>' : q.cadastrado ? '<span class="ac-st ac-cad">Cadastrado</span>' : q.cpf ? '<span class="ac-st ac-ok">CPF ok</span>' : '<span class="ac-st ac-err">Sem CPF</span>'}</summary>
-        <div style="padding:10px 0 4px"><button class="tog setter" aria-pressed="${!!q.morador}" data-morador="${q.id}">morador</button> <button class="tog setter" aria-pressed="${!!q.cadastrado}" data-cadastrado="${q.id}">cadastrado</button>
-        ${q.morador || q.cadastrado ? '' : `<div class="field"><label for="fn-${q.id}">Nome completo</label><input type="text" id="fn-${q.id}" maxlength="70" value="${h(q.fullName || '')}"></div>
-        <div class="field"><label for="cpf-${q.id}">CPF</label><input type="text" id="cpf-${q.id}" inputmode="numeric" maxlength="14" value="${h(q.cpf || '')}"></div>
-        <button class="btn btn-primary btn-sm" data-savecpf="${q.id}">Salvar</button>`}</div></details>`).join('')}
+  const errMsg = pid => { const it = isAdmin && A && A.items.find(x => x.pid === pid); return it && it.msg ? `<p class="hint" style="color:#940B29;width:100%">${h(it.msg)}</p>` : ''; };
+  const conf = D.confirmed.filter(pid => P(pid));
+  const others = isAdmin ? S.players.filter(p => !p.guest && !conf.includes(p.id)).sort(byName).map(p => p.id) : [];
+  const row = pid => { const q = P(pid), st = stOf(pid);
+    if (!isAdmin || q.guest) return `<div class="res-row"><span class="nm" style="flex:1">${h(nameOf(q))}</span>${badge(st)}</div>${errMsg(pid)}`;
+    return `<details class="res-row" style="display:block"><summary style="display:flex;gap:10px;align-items:center;cursor:pointer"><span class="nm" style="flex:1">${h(q.name)}</span>${badge(st)}</summary>
+      <div style="padding:10px 0 4px"><button class="tog setter" aria-pressed="${!!q.morador}" data-morador="${q.id}">morador</button> <button class="tog setter" aria-pressed="${!!q.cadastrado}" data-cadastrado="${q.id}">cadastrado</button>
+      ${q.morador || q.cadastrado ? '' : `<div class="field"><label for="fn-${q.id}">Nome completo</label><input type="text" id="fn-${q.id}" maxlength="70" value="${h(q.fullName || '')}"></div>
+      <div class="field"><label for="cpf-${q.id}">CPF</label><input type="text" id="cpf-${q.id}" inputmode="numeric" maxlength="14" value="${h(q.cpf || '')}"></div>
+      <button class="btn btn-primary btn-sm" data-savecpf="${q.id}">Salvar</button>`}${errMsg(pid)}</div></details>`; };
+  return `<div class="card"><h2>Cadastro na portaria</h2>
+      <p class="hint">Às 17h do dia do jogo, quem está confirmado com <b>CPF ok</b> é liberado na portaria só para aquele dia e passa a <b>Liberado</b>.${PT.ts ? ' Última liberação: ' + hm(PT.ts) + '.' : ''}${isAdmin ? '' : ' Sem CPF? Preencha em Perfil → Entrada no condomínio.'}</p>
+      <div class="legend"><span class="ac-st ac-gray">Morador</span><span class="ac-st ac-cad">Cadastrado</span><span class="ac-st ac-err">Sem CPF</span><span class="ac-st ac-blue">CPF ok</span><span class="ac-st ac-ok">Liberado</span></div>
+      ${conf.length ? `<h3 class="sub">Confirmados · ${h(gameTitle())}</h3>${conf.map(row).join('')}` : '<p class="hint">Ninguém confirmado ainda.</p>'}
+      ${others.length ? `<h3 class="sub">Outros jogadores</h3>${others.map(row).join('')}` : ''}
+      ${isAdmin ? '<button class="btn btn-ghost" data-act="acesso-now" style="margin-top:12px">Liberar agora (lista atual)</button>' : ''}
     </div>`;
 }
 
