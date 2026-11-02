@@ -7,18 +7,31 @@ const file = process.argv[2];
 let s = fs.readFileSync(file, 'utf8');
 
 const BLOCK = `// ---------- avisos do app (início) ----------
-// Acha o WhatsApp da pessoa: celular cadastrado no app, senão o contato salvo com o mesmo nome.
+// Acha o WhatsApp da pessoa: celular cadastrado no app; senão o contato salvo no WhatsApp do robô.
+// Contato bate se o nome salvo for igual ao do app, ou começar por ele, ou tiver todas as palavras dele
+// (ex.: app "Ana Souza", contato "Ana Souza Vôlei"). Se bater mais de um contato, não arrisca.
 function jidFor(p) {
   if (p.phone) return p.phone + '@s.whatsapp.net';
-  const want = simplify(p.name);
-  let found = null;
+  const words = (v) => simplify(v).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+  const want = words(p.fullName || p.name), short = words(p.name);
+  const score = (nm) => {
+    const w = words(nm);
+    if (!w.length) return 0;
+    const j = w.join(' ');
+    if (j === want.join(' ') || j === short.join(' ')) return 3;
+    if (want.length > 1 && want.every((x) => w.includes(x))) return 2;
+    if (short.length > 1 && short.every((x) => w.includes(x))) return 2;
+    if (short.length === 1 && w[0] === short[0]) return 1;
+    return 0;
+  };
+  let best = 0, hits = [];
   for (const [id, c] of Object.entries(contacts)) {
-    if (simplify(c.saved) !== want && simplify(c.push) !== want) continue;
-    const phone = [id, ...(c.alt || [])].find((j) => String(j).endsWith('@s.whatsapp.net'));
-    if (found && found !== (phone || id)) return null; // dois contatos com o mesmo nome: não arrisca
-    found = phone || id;
+    const sc = Math.max(score(c.saved), score(c.push) >= 3 ? 3 : 0);
+    if (!sc) continue;
+    const phone = [id, ...(c.alt || [])].find((j) => String(j).endsWith('@s.whatsapp.net')) || id;
+    if (sc > best) { best = sc; hits = [phone]; } else if (sc === best && !hits.includes(phone)) hits.push(phone);
   }
-  return found;
+  return hits.length === 1 ? hits[0] : null;
 }
 // Troca "N. Nome" por "N. @pessoa" na lista. Convidado: marca quem trouxe ao lado.
 function tagLine(text, pr, mentions) {
