@@ -561,7 +561,14 @@
         if (!nx) return fail('Não achei o próximo jogo.');
         s.bans = (s.bans || []).filter(b => !(b.pid === p.id && b.game === nx.id));
         s.bans.push({ pid: p.id, game: nx.id, nextDay: nx.day, reason: 'falta', private: false, ts: now });
-        if (s.games[nx.id]) s.games[nx.id].presences = s.games[nx.id].presences.filter(x => x.pid !== p.id);
+        const g2 = s.games[nx.id];
+        if (g2) {
+          /* Se ela estava confirmada, quem sobe da espera é registrado pra o robô avisar no grupo. */
+          const before = derive(view(s, nx.id)).confirmed;
+          g2.presences = g2.presences.filter(x => x.pid !== p.id);
+          const up = derive(view(s, nx.id)).confirmed.filter(id => !before.includes(id));
+          g2.promos = (g2.promos || []).concat(up.map(pid => { const pr = g2.presences.find(x => x.pid === pid) || {}; return { pid, ts: now, by: pr.by && pr.by !== pid ? pr.by : null, again: (g2.promos || []).some(x => x.pid === pid) }; })).slice(-60);
+        }
         return ok;
       }
       case 'unban': s.bans = s.bans.filter(b => !(b.pid === a.pid && b.game === a.game)); return ok;
