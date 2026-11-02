@@ -595,7 +595,9 @@ function renderLista() {
   const pagOf = pid => ((RAW.pag || {})[mk] || {})[pid];
   function myCaixinha() {
     const p = me && P(me);
-    if (!p || isAdmin || !LG.pagaVaquinha(p, mk)) return '';
+    const pix = '<button type="button" class="pix-copy" data-copypix="637b5fdd-3f6e-42f9-ae1e-fb2e547281b2"><span class="pix-l">Chave Pix (toque para copiar)</span><span class="pix-k">637b5fdd-3f6e-42f9-ae1e-fb2e547281b2</span></button>';
+    if (!p) return `<div class="card"><h2>Vaquinha de ${mesNome}</h2>${pix}<p class="hint">Escolha seu nome lá em cima para anexar o comprovante de <b>R$ 5,00</b>.</p><button class="btn btn-primary" data-act="whoami">Escolher meu nome</button></div>`;
+    if (isAdmin || !LG.pagaVaquinha(p, mk)) return '';
     const g = pagOf(me), st = g ? g.st : 'falta';
     if (st === 'ok') return `<div class="card"><div class="sec-h"><h2>Vaquinha de ${mesNome}</h2><span class="ac-st ac-ok">Pago</span></div><button type="button" class="pix-copy" data-copypix="637b5fdd-3f6e-42f9-ae1e-fb2e547281b2"><span class="pix-l">Chave Pix (toque para copiar)</span><span class="pix-k">637b5fdd-3f6e-42f9-ae1e-fb2e547281b2</span></button></div>`;
     return `<div class="card"><div class="sec-h"><h2>Vaquinha de ${mesNome}</h2><span class="ac-st ${PST[st][1]}">${PST[st][0]}</span></div>
