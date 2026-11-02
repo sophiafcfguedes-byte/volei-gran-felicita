@@ -238,7 +238,7 @@
       const p = pm[id], r = v.roles[id] || {};
       const sk0 = p.skill != null && p.skill !== '' ? Number(p.skill) : 2.5;
       /* Gênero só pesa entre os Muito bom (N1/N2); nos outros níveis tanto faz homem ou mulher. */
-      return { id, g: sk0 >= 4.5 ? (p.gender === 'F' ? 'F' : 'M') : 'X', sk: sk0, st: !!r.setter, ag: Number(p.age) || 0 };
+      return { id, g: 'X', /* gênero não conta no sorteio */ sk: sk0, st: !!r.setter, ag: Number(p.age) || 0 };
     }), rand);
     const bySkill = arr => arr.sort((a, b) => b.sk - a.sk);
     const order = [
@@ -393,7 +393,6 @@
         if (!admin) return fail('Pra entrar no grupo, fale com a comissão.');
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva seu nome.');
-        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha seu gênero.');
         if (s.players.filter(x => !x.guest).length >= 300) return fail('O grupo chegou no limite de cadastros. Fale com um admin.');
         let p = s.players.find(x => x.name.toLowerCase() === name.toLowerCase());
         if (p && !p.guest) return fail(`Já tem alguém chamado ${p.name}. Procure na lista, ou use um sobrenome.`);
@@ -420,7 +419,6 @@
 
       /* ---------- admin ---------- */
       case 'bulkAdd': {
-        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero de quem está na lista.');
         const lines = String(a.text || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean).slice(0, 200);
         if (!lines.length) return fail('Cole pelo menos um nome.');
         let added = 0, skipped = 0;
@@ -437,12 +435,11 @@
       case 'savePlayer': {
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva o nome.');
-        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero.');
         const dup = s.players.find(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== a.id);
         if (dup) return fail(`Já existe alguém chamado ${dup.name}.`);
         let p = a.id ? pm[a.id] : null;
         if (!p) { p = { id: newId(s, 'p'), photo: null, freq: 0, fixed: false, priv: false }; s.players.push(p); }
-        Object.assign(p, { name, gender: a.gender, skill: clampSkill(a.skill), paid: !!a.paid, guest: !!a.guest });
+        Object.assign(p, { name, gender: a.gender || p.gender || '', skill: clampSkill(a.skill), paid: !!a.paid, guest: !!a.guest });
         if (a.age !== undefined) p.age = Math.max(0, Math.min(4, Math.round(Number(a.age) || 0)));
         if (a.fixed !== undefined) p.fixed = !!a.fixed && !p.guest;
         if (a.priv !== undefined) p.priv = !!a.priv && !p.guest;
@@ -642,7 +639,6 @@
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva o nome do convidado.');
-        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero do convidado.');
         if (!admin && addedByMe() >= limit) return fail(limitMsg);
         if (me && fold(name) === fold(me.name)) return fail('Esse é o seu nome. Se o convidado for outra pessoa, coloque o sobrenome dele.');
         let p = s.players.find(x => fold(x.name) === fold(name));

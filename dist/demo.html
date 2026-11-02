@@ -529,7 +529,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       const p = pm[id], r = v.roles[id] || {};
       const sk0 = p.skill != null && p.skill !== '' ? Number(p.skill) : 2.5;
       /* Gênero só pesa entre os Muito bom (N1/N2); nos outros níveis tanto faz homem ou mulher. */
-      return { id, g: sk0 >= 4.5 ? (p.gender === 'F' ? 'F' : 'M') : 'X', sk: sk0, st: !!r.setter, ag: Number(p.age) || 0 };
+      return { id, g: 'X', /* gênero não conta no sorteio */ sk: sk0, st: !!r.setter, ag: Number(p.age) || 0 };
     }), rand);
     const bySkill = arr => arr.sort((a, b) => b.sk - a.sk);
     const order = [
@@ -684,7 +684,6 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         if (!admin) return fail('Pra entrar no grupo, fale com a comissão.');
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva seu nome.');
-        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha seu gênero.');
         if (s.players.filter(x => !x.guest).length >= 300) return fail('O grupo chegou no limite de cadastros. Fale com um admin.');
         let p = s.players.find(x => x.name.toLowerCase() === name.toLowerCase());
         if (p && !p.guest) return fail(`Já tem alguém chamado ${p.name}. Procure na lista, ou use um sobrenome.`);
@@ -711,7 +710,6 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
 
       /* ---------- admin ---------- */
       case 'bulkAdd': {
-        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero de quem está na lista.');
         const lines = String(a.text || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean).slice(0, 200);
         if (!lines.length) return fail('Cole pelo menos um nome.');
         let added = 0, skipped = 0;
@@ -728,12 +726,11 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       case 'savePlayer': {
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva o nome.');
-        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero.');
         const dup = s.players.find(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== a.id);
         if (dup) return fail(`Já existe alguém chamado ${dup.name}.`);
         let p = a.id ? pm[a.id] : null;
         if (!p) { p = { id: newId(s, 'p'), photo: null, freq: 0, fixed: false, priv: false }; s.players.push(p); }
-        Object.assign(p, { name, gender: a.gender, skill: clampSkill(a.skill), paid: !!a.paid, guest: !!a.guest });
+        Object.assign(p, { name, gender: a.gender || p.gender || '', skill: clampSkill(a.skill), paid: !!a.paid, guest: !!a.guest });
         if (a.age !== undefined) p.age = Math.max(0, Math.min(4, Math.round(Number(a.age) || 0)));
         if (a.fixed !== undefined) p.fixed = !!a.fixed && !p.guest;
         if (a.priv !== undefined) p.priv = !!a.priv && !p.guest;
@@ -933,7 +930,6 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva o nome do convidado.');
-        if (a.gender !== 'F' && a.gender !== 'M') return fail('Escolha o gênero do convidado.');
         if (!admin && addedByMe() >= limit) return fail(limitMsg);
         if (me && fold(name) === fold(me.name)) return fail('Esse é o seu nome. Se o convidado for outra pessoa, coloque o sobrenome dele.');
         let p = s.players.find(x => fold(x.name) === fold(name));
@@ -1495,12 +1491,10 @@ function renderLista() {
   return `${demoNote}${renderWho()}${lockMsg}
     <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir até as ${h(S.current ? S.current.cutoff : '17:00')} do dia do jogo, quando a lista fecha.</p>
     ${isAdmin ? impedidos() : ''}${myCaixinha()}${myCheckin()}${false ? `<div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
-    ${section('Mulheres', members.filter(p => p.gender === 'F'))}
-    ${section('Homens', members.filter(p => p.gender !== 'F'))}
+    ${section('Jogadores', members)}
     ${section('Convidados', guests)}` : ''}
     ${edit && allowGuests && S.settings.guestLimit ? `<div class="card"><h2>Trazer um convidado</h2>
       <div class="field"><label for="g-name">Nome e sobrenome</label><input type="text" id="g-name" maxlength="40" autocomplete="off" placeholder="Nome e sobrenome"></div>
-      <div class="field"><label for="g-gender">Gênero</label><select id="g-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
       <div class="field"><label for="g-skill">Qual o nível do seu convidado, de 0 a 5 (0 = iniciante, 5 = muito bom)?</label><select id="g-skill">${opts(SKILLS, 2.5)}</select></div>
       ${P(me) && P(me).morador ? '' : `<div class="field"><label for="g-cpf">CPF do convidado (obrigatório, pra liberar na portaria)</label><input type="text" id="g-cpf" inputmode="numeric" maxlength="14" autocomplete="off" placeholder="000.000.000-00"></div>`}
       ${S.current && S.current.id >= '2026-11-01' ? `<div class="field"><label for="g-file">Comprovante da vaquinha do convidado (R$ 5,00, com o nome dele)</label><input type="file" id="g-file" accept="image/*,application/pdf"><div class="hint">Se ele já pagou este mês, não precisa anexar de novo.</div></div>` : ''}
@@ -1550,12 +1544,12 @@ function renderTimes() {
         const sum = ps.reduce((a, p) => a + (Number(p.skill) || 0), 0);
         const f = ps.filter(p => p.gender === 'F').length;
         return `<section class="team"><header><h3>${h(LG.teamName(S.current || S.meta, i))}</h3><span class="small">${ps.length} jogadores</span></header><ul>${ps.map(p => `<li>${avatar(p)}<span>${h(nameOf(p))}</span></li>`).join('')}</ul>
-          <footer>${ps.length - f} homens · ${f} mulheres${isAdmin ? ` · nível ${sum}` : ''}${ps.length > 6 ? `<br><b>Time com ${ps.length}:</b> joga quem chegar primeiro, os outros entram no rodízio.` : ''}</footer></section>`; }).join('')}</div>
+          <footer>${ps.length} jogadores${isAdmin ? ` · nível ${sum}` : ''}${ps.length > 6 ? `<br><b>Time com ${ps.length}:</b> joga quem chegar primeiro, os outros entram no rodízio.` : ''}</footer></section>`; }).join('')}</div>
       <p class="hint">${S.teams.auto ? `Sorteado automaticamente às ${fmtTime(S.teams.ts)}, quando a lista fechou` : `Sorteado às ${fmtTime(S.teams.ts)}${S.teams.by && P(S.teams.by) ? ' por ' + h(P(S.teams.by).name) : ''}`}.</p>
       <a class="btn btn-wa" href="${h(waLink(teamsText()))}" target="_blank" rel="noopener">${ICON.wa}Mandar times no WhatsApp</a>`;
   }
   return `<div class="card"><h2>Sorteio dos times</h2>
-      <p class="hint">${S.settings.teams || 4} times, equilibrados entre homens e mulheres e pelo nível de cada um. Às ${S.current ? h(S.current.cutoff) : '17:00'} do dia do jogo, quando a lista fecha, os times são sorteados sozinhos.</p>
+      <p class="hint">${S.settings.teams || 4} times, equilibrados pelo nível de cada um. Às ${S.current ? h(S.current.cutoff) : '17:00'} do dia do jogo, quando a lista fecha, os times são sorteados sozinhos.</p>
       ${isAdmin ? `<button class="btn btn-ball" data-act="draw"${conf.length >= 4 ? '' : ' disabled'} style="font-size:1.05rem">${ICON.shuffle}Sortear times</button>
       ${conf.length < 4 ? '<p class="hint">Precisa de pelo menos 4 confirmados.</p>' : ''}` : ''}
     </div>
@@ -1639,7 +1633,7 @@ function renderMais() {
       <li><b>Desistência:</b> quem estava confirmado e tirar o nome depois que a lista fechou deixa a vaga vazia e fica fora do próximo jogo. Segunda e quinta contam juntas (saiu da segunda, perde a quinta; saiu da quinta, perde a segunda)${sched.some(g => g.private) ? '; a quarta conta separado (perde a quarta seguinte)' : ''}. Quem está na lista de espera pode sair sem problema.</li>
       <li>Acabaram as vagas, entra na lista de espera, que sobe sozinha quando alguém desiste.</li>
       ${st.guestLimit ? `<li>${sched.some(g => g.private) ? `Nos jogos que aceitam convidados, cada um pode trazer até ${st.guestLimit} e só quem trouxe pode tirar.` : `Cada um pode trazer até ${st.guestLimit} convidado${st.guestLimit > 1 ? 's' : ''} e só quem trouxe pode tirar.`}</li>` : ''}
-      <li>O sorteio monta ${st.teams || 4} times equilibrando homens, mulheres, idade e nível. O nível e a faixa etária de cada um só o admin vê.</li>
+      <li>O sorteio monta ${st.teams || 4} times equilibrando idade e nível. O nível e a faixa etária de cada um só o admin vê.</li>
     </ul></details></div>`;
 
   if (!isAdmin) {
@@ -1673,20 +1667,17 @@ function renderMais() {
 
     <div class="card"><h2>Admin · Jogadores</h2>
       <div class="field"><label for="np-name">Novo jogador</label><input type="text" id="np-name" maxlength="40" placeholder="Nome"></div>
-      <div class="grid2"><div class="field"><label for="np-gender">Gênero</label><select id="np-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
-        <div class="field"><label for="np-skill">Nível</label><select id="np-skill">${opts(SKILLS, 2.5)}</select></div></div>
+      <div class="grid2"><div class="field"><label for="np-skill">Nível</label><select id="np-skill">${opts(SKILLS, 2.5)}</select></div></div>
       <label class="check"><input type="checkbox" id="np-fixed"> Comissão (vaga garantida)</label>
       <label class="check"><input type="checkbox" id="np-priv"> ${ICON.ball} Liberado pro vôlei de ${h(privLabel())}</label>
       <button class="btn btn-primary" data-act="add-player">Cadastrar</button>
       <details class="bulk"><summary>Cadastrar vários de uma vez</summary>
-        <p class="hint">Cole um nome por linha. Se quiser, coloque o nível no fim, de 1 a 8 (1 = Iniciante N1 … 8 = Muito bom N2; ex.: <b>Ana 5</b>). Sem nível, fica 3 (Médio N1). Faça uma vez pras mulheres e outra pros homens.</p>
-        <div class="field"><label for="bulk-gender">Gênero de todos da lista</label><select id="bulk-gender"><option value="">Escolha</option>${opts(GENDERS)}</select></div>
+        <p class="hint">Cole um nome por linha. Se quiser, coloque o nível no fim, de 0 a 5 (0 = iniciante, 5 = muito bom; ex.: <b>Ana 3,5</b>). Sem nível, fica 3 (Médio N1). Faça uma vez pras mulheres e outra pros homens.</p>
         <div class="field"><label for="bulk-text">Nomes</label><textarea id="bulk-text" placeholder="Ana 3,5&#10;Bia&#10;Carla 1"></textarea></div>
         <label class="check"><input type="checkbox" id="bulk-priv"> ${ICON.ball} Todos liberados pro vôlei de ${h(privLabel())}</label>
         <button class="btn btn-primary" data-act="bulk-add">Cadastrar todos</button></details>
       <div>${players.map(q => `<div class="adm-player">${avatar(q)}<b>${h(nameOf(q))}</b>
-        <div class="ctrls"><select data-edit="${q.id}" data-field="gender" aria-label="Gênero de ${h(q.name)}">${opts(GENDERS, q.gender)}</select>
-          <select data-edit="${q.id}" data-field="skill" aria-label="Nível de ${h(q.name)}">${opts(SKILLS, q.skill)}</select>
+        <div class="ctrls"><select data-edit="${q.id}" data-field="skill" aria-label="Nível de ${h(q.name)}">${opts(SKILLS, q.skill)}</select>
           <select data-edit="${q.id}" data-field="age" aria-label="Faixa etária de ${h(q.name)}">${opts(AGES, q.age || 0)}</select>
           ${q.guest || q.morador || q.fixed ? '' : `<button class="tog setter" aria-pressed="${!!q.caixinha}" data-caixinha="${q.id}" title="Marcado: já pagou, check-in liberado sem comprovante">vaquinha</button>${q.caixinha ? `<label class="by" style="display:inline-flex;gap:4px;align-items:center">desliga em <input type="month" data-vqate="${q.id}" value="${h(q.caixinhaAte || '')}" style="min-height:30px;padding:2px 6px"></label>` : ''}`}
           ${q.guest ? '' : `<button class="tog setter" aria-pressed="${!!q.fixed}" data-fixed="${q.id}">comissão</button><button class="tog setter" aria-pressed="${!!q.priv}" data-priv="${q.id}" title="Vê e faz check-in nos jogos fechados">${ICON.ball}${h(privLabel())}</button>`}
