@@ -617,15 +617,6 @@ function renderLista() {
         ${g && g.why ? `<p class="hint" style="width:100%">${h(g.why)}</p>` : ''}</div></details>`; }).join('')}
     </div>`;
   }
-  function impedidos() {
-    const list = (S.bans || []).filter(b => b.reason === 'falta').slice().sort((x, y) => x.game.localeCompare(y.game));
-    return `<div class="card"><h2>Impedidos de jogar o próximo jogo</h2>
-      <p class="hint">Escreva o nome de quem faltou. A pessoa não consegue fazer check-in no próximo jogo (segunda ou quinta).</p>
-      <div class="field"><label for="pun-name">Nome</label><input type="text" id="pun-name" autocomplete="off" placeholder="Nome da pessoa"><div id="pun-sug" class="pun-sug"></div></div>
-      <button class="btn btn-primary" data-act="punir">Impedir no próximo jogo</button>
-      ${list.length ? `<ul class="log" style="margin-top:12px">${list.map(b => `<li><span>${h(P(b.pid) ? P(b.pid).name : '?')} · fora de ${LG.DAYS_SHORT[b.nextDay]} ${fmtDM(b.game)}</span><button class="link" data-unban="${b.pid}" data-ugame="${b.game}">Liberar</button></li>`).join('')}</ul>` : ''}
-    </div>`;
-  }
   function myCheckin() {
     const p = me && P(me);
     if (!p) return `<div class="card"><h2>Seu check-in</h2><p class="hint">Escolha seu nome lá em cima pra fazer check-in.</p>
@@ -640,7 +631,7 @@ function renderLista() {
   const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; const rm = !isAdmin && x.by === me && id !== me && p && (p.guest || x.asGuest) ? `<button class="link" style="color:#940B29" data-unguest="${id}">tirar</button>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} </span>${by || t}${rm}</li>`; };
   return `${demoNote}${renderWho()}${lockMsg}
     <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir até as ${h(S.current ? S.current.cutoff : '17:00')} do dia do jogo, quando a lista fecha.</p>
-    ${isAdmin ? impedidos() : ''}${myCaixinha()}${myCheckin()}${false ? `<div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
+${myCaixinha()}${myCheckin()}${false ? `<div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
     ${section('Jogadores', members)}
     ${section('Convidados', guests)}` : ''}
     ${edit && allowGuests && S.settings.guestLimit ? `<div class="card"><h2>Trazer um convidado</h2>
@@ -661,6 +652,17 @@ function renderLista() {
       const what = l.act === 'add' ? `<span class="add">marcou</span> ${h(nm)}` : l.act === 'remove' ? `<span class="rem">tirou</span> ${h(nm)}` : 'sorteou os times';
       return `<li><time>${fmtTime(l.ts)}</time><span>${who} ${what}</span></li>`; }).join('')}</ul></div>` : ''}
     ${renderTimes()}`;
+}
+
+/* Admin: impedir quem faltou de jogar o próximo jogo + lista de suspensões (faltas e desistências). */
+function impedidosCard() {
+  const list = (S.bans || []).slice().sort((x, y) => x.game.localeCompare(y.game));
+  return `<div class="card"><h2>Admin · Impedidos de jogar o próximo jogo</h2>
+      <p class="hint">Escreva o nome de quem faltou. A pessoa não consegue fazer check-in no próximo jogo (segunda ou quinta) cujo check-in ainda não abriu. O impedimento acaba às 17h daquele jogo.</p>
+      <div class="field"><label for="pun-name">Nome</label><input type="text" id="pun-name" autocomplete="off" placeholder="Nome da pessoa"><div id="pun-sug" class="pun-sug"></div></div>
+      <button class="btn btn-primary" data-act="punir">Impedir no próximo jogo</button>
+      ${list.length ? list.map(b => `<div class="role-row">${avatar(P(b.pid))}<span class="nm">${h(P(b.pid) ? P(b.pid).name : '?')}<br><span class="by">${b.reason === 'falta' ? 'faltou' : `saiu ${LG.DAYS_SHORT[b.fromDay]} ${fmtDM(b.from)}`} · fora de ${LG.DAYS_SHORT[b.nextDay]} ${fmtDM(b.game)}</span></span><button class="btn btn-ghost btn-sm" data-unban="${b.pid}" data-ugame="${b.game}">Liberar</button></div>`).join('') : '<p class="hint">Ninguém impedido.</p>'}
+    </div>`;
 }
 
 function renderCaixinha() {
@@ -852,9 +854,7 @@ function renderMais() {
       <div class="field"><label for="moradores">Moradores</label><textarea id="moradores" rows="8" placeholder="Sophia B3 1304">${h(RAW.settings.moradores || '')}</textarea></div>
       <button class="btn btn-primary" data-act="save-moradores">Salvar moradores</button></div>
 
-    <div class="card"><h2>Admin · Suspensões</h2>
-      <p class="hint">Quem tirou o nome no dia do jogo depois do horário-limite fica fora do próximo. Toque em <b>Liberar</b> se foi engano.</p>
-      ${(S.bans || []).length ? (S.bans || []).slice().sort((x, y) => x.game.localeCompare(y.game)).map(b => `<div class="role-row">${avatar(P(b.pid))}<span class="nm">${h(nameOf(P(b.pid)))}<br><span class="by">${b.reason === 'falta' ? 'faltou' : `saiu ${LG.DAYS_SHORT[b.fromDay]} ${fmtDM(b.from)}`} · fora de ${LG.DAYS_SHORT[b.nextDay]} ${fmtDM(b.game)}</span></span><button class="btn btn-ghost btn-sm" data-unban="${b.pid}" data-ugame="${b.game}">Liberar</button></div>`).join('') : '<p class="hint">Ninguém suspenso.</p>'}</div>
+    ${impedidosCard()}
 
     <div class="card"><h2>Admin · Sugestões recebidas</h2>
       ${S.suggestions.length ? S.suggestions.map(x => `<div class="sug"><div>${h(x.text)}</div><div class="by">${x.by && P(x.by) ? h(P(x.by).name) : 'Anônima'} · ${fmtDay(x.ts)} · <button class="link" data-sugdel="${x.id}">apagar</button></div></div>`).join('') : '<p class="hint">Nenhuma sugestão por enquanto.</p>'}</div>`;
