@@ -940,13 +940,14 @@ document.addEventListener('click', async e => {
   if (!t) { if (e.target.id === 'sheet') closeSheet(); return; }
   if (t.dataset.tab) { tab = t.dataset.tab; store.set('tab', tab); render(); window.scrollTo(0, 0); return; }
   if (!armed(t)) return;
+  if (t.dataset.punpick) { const i = document.getElementById('pun-name'); i.value = t.dataset.punpick; document.getElementById('pun-sug').innerHTML = ''; return; }
   if (t.dataset.pick) return openPin(t.dataset.pick);
   if (t.dataset.game) { sel = t.dataset.game; store.set('game', sel); aliasGame(); render(); return; }
   if (t.dataset.priv) return act({ type: 'togglePriv', id: t.dataset.priv });
   if (t.dataset.newpin) return act({ type: 'setPin', id: t.dataset.newpin, pin: 'random' }, 'Senha nova criada.');
   if (t.dataset.unban) return act({ type: 'unban', pid: t.dataset.unban, game: t.dataset.ugame }, 'Liberado.');
   if (t.dataset.paid) return act({ type: 'togglePaid', id: t.dataset.paid });
-  if (t.dataset.pick) { const i = document.getElementById('pun-name'); i.value = t.dataset.pick; document.getElementById('pun-sug').innerHTML = ''; return; }
+  if (t.dataset.punpick) { const i = document.getElementById('pun-name'); i.value = t.dataset.punpick; document.getElementById('pun-sug').innerHTML = ''; return; }
   if (t.dataset.copypix) { const k = t.dataset.copypix; const done = () => toast('Chave Pix copiada!'); if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(k).then(done, () => { prompt('Copie a chave Pix:', k); }); else { const ta = document.createElement('textarea'); ta.value = k; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} ta.remove(); } return; }
   if (t.dataset.cxdel) return act({ type: 'caixaDel', id: t.dataset.cxdel }, 'Apagado.');
   if (t.dataset.caixinha) return act({ type: 'toggleCaixinha', id: t.dataset.caixinha });
@@ -1024,7 +1025,7 @@ document.addEventListener('input', e => {
   if (e.target.id === 'pun-name') {
     const q = norm(e.target.value), box = document.getElementById('pun-sug');
     const hits = q ? S.players.filter(p => !p.guest && norm(p.name).includes(q)).sort(byName).slice(0, 6) : [];
-    box.innerHTML = hits.map(p => `<button type="button" data-pick="${h(p.name)}">${h(p.name)}</button>`).join('');
+    box.innerHTML = hits.map(p => `<button type="button" data-punpick="${h(p.name)}">${h(p.name)}</button>`).join('');
   }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });

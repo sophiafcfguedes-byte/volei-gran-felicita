@@ -134,7 +134,8 @@
     }
     s.settings.v = SETTINGS_VERSION;
     const today = (() => { const p = spParts(now); return isoDate(p.y, p.m, p.d); })();
-    s.bans = (s.bans || []).filter(b => b.game >= today);
+    /* Suspensão acaba às 17h (horário-limite) do jogo em que a pessoa estava impedida: aí já pode marcar o próximo. */
+    s.bans = (s.bans || []).filter(b => b.game > today || (b.game === today && !(s.games[b.game] && now >= s.games[b.game].meta.cutoffAt)));
     const act = activeGames(s, now);
     const ids = new Set(act.map(g => g.id));
     for (const id of Object.keys(s.games)) {
