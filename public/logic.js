@@ -11,7 +11,7 @@
   const SETTINGS_VERSION = 8;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'caixaSaldo', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
@@ -564,6 +564,12 @@
         s.caixa.lanc.unshift({ id: newId(s, 'x'), ts: now, desc, valor: a.tipo === 'entrada' ? v : -v });
         return ok;
       }
+      case 'caixaSaldo': {
+        const raw = String(a.valor || '').replace(/[^\d,.]/g, ''); const v = Math.round(Number(raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw) * 100) / 100;
+        if (!Number.isFinite(v) || raw === '') return fail('Valor inválido.');
+        s.caixa ||= {}; s.caixa.base = { valor: v, ts: now };
+        return ok;
+      }
       case 'caixaDel': { if (s.caixa && s.caixa.lanc) s.caixa.lanc = s.caixa.lanc.filter(x => x.id !== a.id); return ok; }
       case 'toggleCaixinha': { const p = pm[a.id]; if (p && !p.guest) p.caixinha = !p.caixinha; return ok; } /* marcado = liberado (já pagou adiantado) */
       case 'punir': {
@@ -778,11 +784,13 @@
   /* Caixinha: saldo inicial + R$ 5 por comprovante aprovado (a partir de 1º/11/2026) + entradas − gastos lançados pelos admins. */
   const CAIXA_INICIAL = 65.07, CAIXA_DESDE = Date.parse('2026-11-01T19:55:00-03:00'), VALOR_VAQUINHA = 5;
   function caixaView(s) {
+    /* Admin pode acertar o saldo: a partir daí só soma o que vier depois. */
+    const base = (s.caixa && s.caixa.base) || { valor: CAIXA_INICIAL, ts: CAIXA_DESDE };
     let n = 0;
-    for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && (e.ts || 0) >= CAIXA_DESDE) n++;
+    for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && (e.ts || 0) >= base.ts) n++;
     const lanc = ((s.caixa || {}).lanc || []).map(x => ({ id: x.id, ts: x.ts, desc: x.desc, valor: x.valor }));
-    const soma = lanc.reduce((t, x) => t + x.valor, 0);
-    return { inicial: CAIXA_INICIAL, comprovantes: n, entradaVaquinha: n * VALOR_VAQUINHA, lanc, saldo: Math.round((CAIXA_INICIAL + n * VALOR_VAQUINHA + soma) * 100) / 100 };
+    const soma = lanc.filter(x => x.ts >= base.ts).reduce((t, x) => t + x.valor, 0);
+    return { inicial: base.valor, comprovantes: n, entradaVaquinha: n * VALOR_VAQUINHA, lanc, saldo: Math.round((base.valor + n * VALOR_VAQUINHA + soma) * 100) / 100 };
   }
 
   function publicState(s, isAdmin, meId) {

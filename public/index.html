@@ -678,7 +678,10 @@ function renderCaixinha() {
       <div class="field"><label for="cx-desc">Com o que foi</label><input type="text" id="cx-desc" maxlength="80" placeholder="Ex.: bola nova"></div>
       <div class="grid2"><div class="field"><label for="cx-val">Valor (R$)</label><input type="text" id="cx-val" inputmode="decimal" placeholder="0,00"></div>
       <div class="field"><label for="cx-tipo">Tipo</label><select id="cx-tipo"><option value="gasto">Gasto</option><option value="entrada">Entrada</option></select></div></div>
-      <button class="btn btn-primary" data-act="caixa-add">Lançar</button></div>` : ''}
+      <button class="btn btn-primary" data-act="caixa-add">Lançar</button></div>
+    <div class="card"><h2>Acertar saldo</h2><p class="hint">Use se o saldo do app estiver diferente da conta. A partir daí ele continua somando sozinho.</p>
+      <div class="field"><label for="cx-saldo">Saldo correto (R$)</label><input type="text" id="cx-saldo" inputmode="decimal" placeholder="0,00"></div>
+      <button class="btn btn-ghost" data-act="caixa-saldo">Acertar saldo</button></div>` : ''}
     <div class="card"><h2>Movimentações</h2>
       ${C.lanc.length ? C.lanc.map(x => `<div class="res-row"><span class="hr" style="min-width:48px">${dm(x.ts)}</span><span class="nm" style="flex:1">${h(x.desc)}</span><b style="color:${x.valor < 0 ? '#c62828' : '#1f9d55'}">${brl(x.valor)}</b>${isAdmin ? `<button class="link" data-cxdel="${x.id}" data-confirm style="color:#940B29">apagar</button>` : ''}</div>`).join('') : '<p class="hint">Nenhum gasto lançado ainda.</p>'}
     </div>`;
@@ -976,6 +979,7 @@ document.addEventListener('click', async e => {
       return;
     }
     case 'punir': return act({ type: 'punir', name: val('pun-name') }, 'Pronto: impedido no próximo jogo.', ['pun-name']);
+    case 'caixa-saldo': return act({ type: 'caixaSaldo', valor: val('cx-saldo') }, 'Saldo acertado.', ['cx-saldo']);
     case 'caixa-add': return act({ type: 'caixaAdd', desc: val('cx-desc'), valor: val('cx-val'), tipo: val('cx-tipo') }, 'Lançado.', ['cx-desc', 'cx-val']);
     case 'checkin': return setIn(me, true);
     case 'desistir': return setIn(me, false);
