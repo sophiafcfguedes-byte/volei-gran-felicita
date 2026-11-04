@@ -476,6 +476,7 @@ function renderHeader() {
   if (lk.reason === 'notOpen') chip = `<span class="chip chip-lock">Check-in abre ${LG.DAYS_SHORT[spDate(g.openAt).wd]} às ${fmtTime(g.openAt)}</span>`;
   else if (lk.locked) chip = `<span class="chip chip-lock">${lk.reason === 'noGame' ? 'Sem jogo marcado' : lk.reason === 'closed' ? 'Lista fechada às ' + g.cutoff : 'Lista fechada até ' + fmtTime(lk.until)}</span>`;
   else chip = '<span class="chip chip-open">Check-in aberto</span>';
+  if (LG.quartaCancelada(S, D)) chip = '<span class="chip chip-lock">Cancelado: não deu 12 pessoas</span>';
   const cal = g ? (() => { const p = spDate(g.startAt); return `<div class="cal" aria-label="${h(fmtLong(g.startAt))}"><span class="cal-m">${LG.MONTHS[p.m]}</span><span class="cal-d">${p.d}</span><span class="cal-w">${LG.DAYS[p.wd]}</span></div>`; })() : '';
   return `
     <img class="swallow" src="${IMG.glide}" alt="">

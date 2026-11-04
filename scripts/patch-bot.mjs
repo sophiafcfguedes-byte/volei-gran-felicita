@@ -83,6 +83,17 @@ async function avisosTick() {
       if (old) { await wait(1500); try { await sock.sendMessage(groupId, { delete: old }); } catch (e) { logErr('Não consegui apagar a lista anterior:', e.message); } }
     } catch (e) { logErr('Não consegui mandar a lista:', e.message); }
   }
+  // Quarta sem 12 pessoas às 17h: "@all vôlei cancelado" no grupo da quarta (uma vez).
+  for (const g of data.games || []) {
+    const groupId = rt[g.group]?.groupId;
+    if (!groupId || !g.cancel || state.avisos[g.cancel.key]) continue;
+    state.avisos[g.cancel.key] = Date.now(); saveState();
+    try {
+      await sock.sendMessage(groupId, { text: '@all ' + g.cancel.text, mentionAll: true, contextInfo: { nonJidMentions: 1 } });
+      try { await sock.sendPresenceUpdate('unavailable'); } catch (e) {}
+      log('Aviso de cancelamento enviado (' + g.id + ').');
+    } catch (e) { logErr('Não consegui mandar o cancelamento:', e.message); }
+  }
   // 13h de segunda/quinta com vaga sobrando: "@todos faltam X vagas", marcando todo mundo do grupo.
   for (const g of data.games || []) {
     const groupId = rt[g.group]?.groupId;

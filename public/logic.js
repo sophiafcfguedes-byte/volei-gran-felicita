@@ -839,6 +839,8 @@
     return c ? `${c[1]} Time ${c[0]}` : `Time ${i + 1}`;
   }
 
+  const MIN_QUARTA = 12;
+  const quartaCancelada = (v, d) => !!(v && v.current && v.current.private && v.frozen && d.confirmed.length < MIN_QUARTA);
   function avisos(s, now) {
     now = now || Date.now();
     const pm = playerMap(s), out = [];
@@ -866,10 +868,16 @@
       if (!g.meta.private && left > 0 && !g.frozen && now >= t13 && now < g.meta.cutoffAt) {
         vagas = { key: g.meta.id + ':vagas13d', text: `🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐\nFaltam ${left} ${left === 1 ? 'vaga' : 'vagas'} a ${left === 1 ? 'ser preenchida' : 'serem preenchidas'} pro vôlei de hoje (${g.meta.start}).` };
       }
-      out.push({ vagas, teams, promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
+      /* Quarta (jogo fechado): se às 17h não tiver 12 confirmados, o vôlei é cancelado e o robô avisa no grupo. */
+      let cancel = null;
+      if (g.meta.private && g.frozen && d.confirmed.length < MIN_QUARTA) {
+        cancel = { key: g.meta.id + ':cancelado', text: `🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐\nVôlei cancelado: não completou ${MIN_QUARTA} pessoas até as ${g.meta.cutoff}.` };
+        teams = null;
+      }
+      out.push({ cancel, vagas, teams, promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
     }
     return { games: out };
   }
 
-  return { pagaVaquinha, devePagarVaquinha, monthKey, teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  return { quartaCancelada, pagaVaquinha, devePagarVaquinha, monthKey, teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });
