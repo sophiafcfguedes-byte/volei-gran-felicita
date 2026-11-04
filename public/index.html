@@ -245,6 +245,12 @@ details summary { cursor: pointer; font-weight: 700; }
 .cx-saldo { display: flex; flex-direction: column; gap: 2px; margin: 6px 0 10px; }
 .cx-saldo b { font-family: 'Alfa Slab One', Georgia, serif; font-weight: 400; font-size: 2.2rem; color: #1f9d55; }
 .pay-warn { position: relative; margin: 12px 0 4px; padding: 10px 12px; border-radius: 12px; background: #fff; color: #c62828; font-weight: 900; font-size: .95rem; letter-spacing: .3px; text-align: center; line-height: 1.3; }
+body.login-mode .tabs { display: none; }
+.login-brand { flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 18px 0 10px; gap: 10px; }
+.login-brand img { width: 140px; height: 140px; }
+body.login-mode #hdr .swallow { display: none; }
+.login-card .field { margin-bottom: 14px; }
+.login-card { margin-top: 8px; }
 .ci-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
 .ci-btns .btn { min-height: 56px; font-size: 1.1rem; font-weight: 800; color: #fff; border: 0; }
 .ci-in { background: #1f9d55; } .ci-out { background: #c62828; }
@@ -452,6 +458,15 @@ function render() {
   const keep = {};
   document.querySelectorAll('#main input[id], #main select[id], #main textarea[id]').forEach(el => { if (el.type !== 'checkbox' && el.type !== 'file') keep[el.id] = el.value; });
   const focusId = document.activeElement && document.activeElement.id;
+  /* Quem não entrou ainda vê só o escudo e o login (usuário + senha). */
+  const loginMode = mode === 'server' && !me && !isAdmin;
+  document.body.classList.toggle('login-mode', loginMode);
+  if (loginMode) {
+    $('#hdr').innerHTML = `<img class="swallow" src="${IMG.glide}" alt=""><div class="brand login-brand"><img src="${IMG.badge}" alt="Escudo Gran Felicitá"><div class="grow"><span class="eyebrow">${h(S.settings.groupName)} <span class="stars" aria-hidden="true">★★</span></span></div></div>`;
+    $('#main').innerHTML = renderLogin();
+    for (const id in keep) { const el = document.getElementById(id); if (el) el.value = keep[id]; }
+    return;
+  }
   $('#hdr').innerHTML = renderHeader();
   $('#main').innerHTML = ({ lista: renderLista, caixinha: renderCaixinha, reservas: renderReservas, portaria: renderPortaria, mais: renderMais }[tab] || renderLista)();
   const pb = document.querySelector('#tabs [data-tab=portaria]'); if (pb) pb.hidden = false;
@@ -665,6 +680,21 @@ function impedidosCard() {
       <div class="field"><label for="pun-name">Nome</label><input type="text" id="pun-name" autocomplete="off" placeholder="Nome da pessoa"><div id="pun-sug" class="pun-sug"></div></div>
       <button class="btn btn-primary" data-act="punir">Impedir no próximo jogo</button>
       ${list.length ? list.map(b => `<div class="role-row">${avatar(P(b.pid))}<span class="nm">${h(P(b.pid) ? P(b.pid).name : '?')}<br><span class="by">${b.reason === 'falta' ? 'faltou' : `saiu ${LG.DAYS_SHORT[b.fromDay]} ${fmtDM(b.from)}`} · fora de ${LG.DAYS_SHORT[b.nextDay]} ${fmtDM(b.game)}</span></span><button class="btn btn-ghost btn-sm" data-unban="${b.pid}" data-ugame="${b.game}">Liberar</button></div>`).join('') : '<p class="hint">Ninguém impedido.</p>'}
+    </div>`;
+}
+
+function renderLogin() {
+  const regs = S.players.filter(p => !p.guest).slice().sort(byName);
+  return `<div class="card login-card"><h2>Entrar</h2>
+      <form id="login-form" autocomplete="on">
+        <div class="field"><label for="lg-user">Usuário</label><select id="lg-user" required><option value="">Selecione seu nome</option>${regs.map(p => `<option value="${p.id}">${h(p.name)}</option>`).join('')}</select></div>
+        <div class="field"><label for="lg-pin">Senha</label><input type="password" id="lg-pin" autocapitalize="characters" autocomplete="current-password" maxlength="12" placeholder="Senha"></div>
+        <button class="btn btn-primary" type="submit" style="width:100%">Entrar</button>
+      </form>
+      <p class="hint" style="margin-top:12px">A senha são os 3 últimos números do seu CPF + uma letra. Esqueceu? Fale com a comissão.</p>
+      <details style="margin-top:6px"><summary class="hint" style="cursor:pointer">Entrar como admin</summary>
+        <div class="field" style="margin-top:8px"><label for="adm-pw">Senha de admin</label><input type="password" id="adm-pw" autocomplete="current-password"></div>
+        <button class="btn btn-ghost" data-act="login">Entrar como admin</button></details>
     </div>`;
 }
 
@@ -919,12 +949,14 @@ function openPin(pid) {
   setTimeout(() => { const q = document.getElementById('pin-in'); if (q) q.focus(); }, 50);
 }
 document.addEventListener('submit', async e => {
-  if (e.target.id !== 'pin-form') return;
+  if (e.target.id !== 'pin-form' && e.target.id !== 'login-form') return;
   e.preventDefault();
-  const pid = e.target.dataset.pid;
+  const fromLogin = e.target.id === 'login-form';
+  const pid = fromLogin ? val('lg-user') : e.target.dataset.pid;
+  if (!pid) return toast('Selecione seu nome.', true);
   let r;
-  try { r = await Backend.act({ type: 'loginPlayer', pid, pin: val('pin-in'), by: null }); } catch (err) { toast('Sem conexão. Tente de novo.', true); return; }
-  if (!r.ok) { toast(r.error || 'Senha errada.', true); const q = document.getElementById('pin-in'); if (q) { q.value = ''; q.focus(); } return; }
+  try { r = await Backend.act({ type: 'loginPlayer', pid, pin: val(fromLogin ? 'lg-pin' : 'pin-in'), by: null }); } catch (err) { toast('Sem conexão. Tente de novo.', true); return; }
+  if (!r.ok) { toast(r.error || 'Senha errada.', true); const q = document.getElementById(fromLogin ? 'lg-pin' : 'pin-in'); if (q) { q.value = ''; q.focus(); } return; }
   me = pid; auth = r.auth || 'demo'; store.set('me', me); store.set('auth', auth);
   closeSheet(); await refresh(); toast('Oi, ' + P(me).name + '!');
 });
