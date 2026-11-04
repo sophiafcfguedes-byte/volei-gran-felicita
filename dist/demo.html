@@ -971,6 +971,9 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
           if (v.presences.some(x => x.pid === p.id)) return fail(`${p.name} já está na lista.`);
           const b = (s.bans || []).find(x => x.pid === p.id && x.game === meta.id);
           if (b && !admin) return fail(b.reason === 'falta' ? `${p.name} está impedido(a) neste jogo por falta.` : `${p.name} está fora deste jogo por ter desistido depois das ${b.cutoff}.`);
+          /* Já tem cadastro: precisa estar em dia com a vaquinha (comprovante dele, vaquinha ligada ou pago como convidado). */
+          if (!admin && devePagarVaquinha(p, meta) && !pagou(s, p.id, monthKey(meta.startAt)) && !pagouConvidado(s, p.name, monthKey(meta.startAt), p.cpf || ''))
+            return fail(`${p.name} ainda não pagou a vaquinha deste mês. Ele(a) precisa anexar o comprovante no app (ou pague como convidado com o comprovante no nome dele).`);
           v.presences.push({ pid: p.id, by: me ? me.id : null, ts: now, asGuest: true });
           log('add', p.id);
           return ok;
