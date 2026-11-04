@@ -1080,11 +1080,11 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   function caixaView(s) {
     /* Admin pode acertar o saldo: a partir daí só soma o que vier depois. */
     const base = (s.caixa && s.caixa.base) || { valor: CAIXA_INICIAL, ts: CAIXA_DESDE };
-    let n = 0;
-    for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && (e.ts || 0) >= base.ts) n++;
+    let n = 0, tot = 0;
+    for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && (e.ts || 0) >= base.ts) { n++; tot += e.valor >= VALOR_VAQUINHA ? e.valor : VALOR_VAQUINHA; } /* soma o valor do comprovante (mínimo R$ 5) */
     const lanc = ((s.caixa || {}).lanc || []).map(x => ({ id: x.id, ts: x.ts, desc: x.desc, valor: x.valor }));
     const soma = lanc.filter(x => x.ts >= base.ts).reduce((t, x) => t + x.valor, 0);
-    return { inicial: base.valor, comprovantes: n, entradaVaquinha: n * VALOR_VAQUINHA, lanc, saldo: Math.round((base.valor + n * VALOR_VAQUINHA + soma) * 100) / 100 };
+    return { inicial: base.valor, comprovantes: n, entradaVaquinha: Math.round(tot * 100) / 100, lanc, saldo: Math.round((base.valor + tot + soma) * 100) / 100 };
   }
 
   function publicState(s, isAdmin, meId) {
@@ -1479,7 +1479,7 @@ function renderLista() {
     if (st === 'ok') return `<div class="card"><div class="sec-h"><h2>Vaquinha de ${mesNome}</h2><span class="ac-st ac-ok">Pago</span></div><button type="button" class="pix-copy" data-copypix="637b5fdd-3f6e-42f9-ae1e-fb2e547281b2"><span class="pix-l">Chave Pix (toque para copiar)</span><span class="pix-k">637b5fdd-3f6e-42f9-ae1e-fb2e547281b2</span></button></div>`;
     return `<div class="card"><div class="sec-h"><h2>Vaquinha de ${mesNome}</h2><span class="ac-st ${PST[st][1]}">${PST[st][0]}</span></div>
       <button type="button" class="pix-copy" data-copypix="637b5fdd-3f6e-42f9-ae1e-fb2e547281b2"><span class="pix-l">Chave Pix (toque para copiar)</span><span class="pix-k">637b5fdd-3f6e-42f9-ae1e-fb2e547281b2</span></button>
-      <p class="hint">${st === 'falta' ? `Para fazer check-in este mês, anexe o comprovante de pagamento de <b>R$ 5,00</b> (com a data de ${mesNome} e o seu nome). Vale o mês inteiro.` : h(g.why || '')}</p>
+      <p class="hint">${st === 'falta' ? `Para fazer check-in este mês, anexe o comprovante de pagamento de <b>R$ 5,00</b> (ou mais, se quiser) (com a data de ${mesNome} e o seu nome). Vale o mês inteiro.` : h(g.why || '')}</p>
       <label class="btn btn-primary" for="cx-file">${st === 'falta' ? 'Anexar comprovante' : 'Anexar outro comprovante'}</label><input type="file" id="cx-file" accept="image/*,application/pdf" hidden></div>`;
   }
   function caixinhaAdmin() {
@@ -1550,7 +1550,7 @@ function renderCaixinha() {
   const dm = ts => { const d = new Date(ts - 3 * 3600e3); return `${d.getUTCDate()}/${d.getUTCMonth() + 1}`; };
   return `<div class="card"><h2>Caixinha</h2>
       <div class="cx-saldo"><span class="by">Saldo em caixa</span><b>${brl(C.saldo)}</b></div>
-      <p class="hint">Soma sozinha R$ 5,00 a cada comprovante da vaquinha aprovado.${C.comprovantes ? ` Neste período: ${C.comprovantes} comprovante${C.comprovantes > 1 ? 's' : ''} (${brl(C.entradaVaquinha)}).` : ''}</p></div>
+      <p class="hint">Soma sozinha o valor de cada comprovante da vaquinha aprovado.${C.comprovantes ? ` Neste período: ${C.comprovantes} comprovante${C.comprovantes > 1 ? 's' : ''} (${brl(C.entradaVaquinha)}).` : ''}</p></div>
     ${isAdmin ? `<div class="card"><h2>Lançar gasto ou entrada</h2>
       <div class="field"><label for="cx-desc">Com o que foi</label><input type="text" id="cx-desc" maxlength="80" placeholder="Ex.: bola nova"></div>
       <div class="grid2"><div class="field"><label for="cx-val">Valor (R$)</label><input type="text" id="cx-val" inputmode="decimal" placeholder="0,00"></div>

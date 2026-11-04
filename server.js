@@ -178,14 +178,14 @@ http.createServer(async (req, res) => {
       if (gName) {
         const rg = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: gName });
         state.pagGuests ||= {}; state.pagGuests[mk] ||= {};
-        state.pagGuests[mk][gKey] = { ts: now, st: rg.st, by: pid, name: gName };
+        state.pagGuests[mk][gKey] = { ts: now, st: rg.st, by: pid, name: gName, valor: rg.valor || 0 };
         version = Date.now(); save();
         return send(res, 200, { ok: rg.st === 'ok', st: rg.st, why: rg.why || '', error: rg.st === 'ok' ? '' : (rg.why || '').replace('Um admin vai conferir.', 'Confira e anexe outro.') });
       }
       const p = state.players.find(x => x.id === pid);
       const r = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: (p && (p.fullName || p.name)) || '' });
       state.pag ||= {}; state.pag[mk] ||= {};
-      state.pag[mk][pid] = { ts: now, st: r.st, why: r.why || '', ext };
+      state.pag[mk][pid] = { ts: now, st: r.st, why: r.why || '', ext, valor: r.valor || 0 };
       version = Date.now(); save();
       return send(res, 200, { ok: true, st: r.st, why: r.why || '', version: version + ':' + pid, isAdmin: false, now, state: L.publicState(state, false, pid) });
     }

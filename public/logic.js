@@ -786,11 +786,11 @@
   function caixaView(s) {
     /* Admin pode acertar o saldo: a partir daí só soma o que vier depois. */
     const base = (s.caixa && s.caixa.base) || { valor: CAIXA_INICIAL, ts: CAIXA_DESDE };
-    let n = 0;
-    for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && (e.ts || 0) >= base.ts) n++;
+    let n = 0, tot = 0;
+    for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && (e.ts || 0) >= base.ts) { n++; tot += e.valor >= VALOR_VAQUINHA ? e.valor : VALOR_VAQUINHA; } /* soma o valor do comprovante (mínimo R$ 5) */
     const lanc = ((s.caixa || {}).lanc || []).map(x => ({ id: x.id, ts: x.ts, desc: x.desc, valor: x.valor }));
     const soma = lanc.filter(x => x.ts >= base.ts).reduce((t, x) => t + x.valor, 0);
-    return { inicial: base.valor, comprovantes: n, entradaVaquinha: n * VALOR_VAQUINHA, lanc, saldo: Math.round((base.valor + n * VALOR_VAQUINHA + soma) * 100) / 100 };
+    return { inicial: base.valor, comprovantes: n, entradaVaquinha: Math.round(tot * 100) / 100, lanc, saldo: Math.round((base.valor + tot + soma) * 100) / 100 };
   }
 
   function publicState(s, isAdmin, meId) {
