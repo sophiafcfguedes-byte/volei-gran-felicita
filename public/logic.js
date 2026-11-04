@@ -230,9 +230,9 @@
     rand = rand || Math.random;
     const pm = playerMap(v);
     const n = ids.length;
-    const k = !(v.meta && v.meta.private) ? (Number(v.settings.teams) || 4) : Math.max(2, Math.min(Math.floor(n / 2), Number(v.settings.teams) || 4));
+    const k = !((v.meta && v.meta.private) || (v.current && v.current.private)) ? (Number(v.settings.teams) || 4) : Math.max(2, Math.min(Math.floor(n / 2), Number(v.settings.teams) || 4));
     /* Segunda/quinta: times de 6 obrigatórios (o último fica com o que sobrar). Quarta: divide igual. */
-    const six = !(v.meta && v.meta.private);
+    const six = !((v.meta && v.meta.private) || (v.current && v.current.private));
     const capOf = i => six ? Math.min(6, Math.max(0, n - 6 * i)) : Math.ceil(n / k);
     const P = shuffle(ids.map(id => {
       const p = pm[id], r = v.roles[id] || {};
@@ -254,13 +254,14 @@
        melhor da 1ª camada pega o pior da 2ª, e assim por diante. Assim o time do nota 5 fica com o
        nota 0, cada time leva um da faixa do 4, um da faixa do 3... Depois troca gente da MESMA camada
        entre times só se deixar as somas mais parecidas. */
-    if (!(v.meta && v.meta.private)) {
+    if (!((v.meta && v.meta.private) || (v.current && v.current.private))) {
       const sorted = shuffle(order.slice(), rand).sort((a, b) => b.sk - a.sk);
       const teams = shuffle(T.slice(), rand).sort((a, b) => b.cap - a.cap);
       let fwd = true, layer = 0;
       for (let i = 0; i < sorted.length; layer++, fwd = !fwd) {
         const seq = fwd ? teams : teams.slice().reverse();
         for (const t of seq) { if (i >= sorted.length) break; if (t.m.length >= t.cap) continue; const x = sorted[i++]; x.lock = 'L' + layer; put(t, x); }
+        if (!teams.some(t => t.m.length < t.cap)) break; /* todos cheios: sem isso o laço não terminaria */
       }
       const spreadS = () => { const v2 = T.map(t => t.sum / t.cap); return Math.max(...v2) - Math.min(...v2); };
       for (let it = 0; it < 800; it++) {
@@ -277,6 +278,7 @@
     for (const x of order) {
       if (x.lock) continue;
       const open = T.filter(t => t.m.length < t.cap);
+      if (!open.length) break; /* sem vaga em nenhum time */
       /* gênero primeiro, depois faixa etária espalhada, depois nível */
       const key = t => [x.st ? t.st : x.g === 'F' ? t.f : x.g === 'M' ? t.mm : 0, x.ag ? t.ages[x.ag] : 0, t.sum / t.cap, t.m.length];
       open.sort((a, b) => { const ka = key(a), kb = key(b); for (let i = 0; i < 4; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i]; return rand() - 0.5; });
@@ -853,7 +855,7 @@
       const p = spParts(g.meta.startAt);
       const dd = String(p.d).padStart(2, '0') + '/' + String(p.m + 1).padStart(2, '0');
       const lines = [`🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐`, `${g.meta.start} às ${g.meta.end}`,
-        `✅ Lista completa: ${d.confirmed.length}/${g.meta.max}`, '',
+        d.confirmed.length >= g.meta.max ? `✅ Lista completa: ${d.confirmed.length}/${g.meta.max}` : `✅ Lista fechada: ${d.confirmed.length}/${g.meta.max}`, '',
         ...d.fixed.map(id => `⭐ ${nm(id)}`), ...d.regular.map((id, i) => `${i + 1}. ${nm(id)}`)];
       if (d.waitlist.length) lines.push('', '*Lista de espera*', ...d.waitlist.map((id, i) => `${i + 1}. ${nm(id)}`));
       lines.push('', `Quem desistir até as ${g.meta.cutoff} libera a vaga pra espera.`);
@@ -877,7 +879,7 @@
         cancel = { key: g.meta.id + ':cancelado', text: `vôlei cancelado pois não atingiu o número mínimo de pessoas`, title: `🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐` };
         teams = null;
       }
-      out.push({ cancel, vagas, teams, promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
+      out.push({ cancel, vagas, teams, promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max || (!!g.meta.private && !!g.frozen && d.confirmed.length >= MIN_QUARTA), /* quarta: às 17h com 12+ a lista vai pro grupo */ text: lines.join('\n') });
     }
     return { games: out };
   }
