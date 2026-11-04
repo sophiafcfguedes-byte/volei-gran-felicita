@@ -89,7 +89,7 @@ async function avisosTick() {
     if (!groupId || !g.cancel || state.avisos[g.cancel.key]) continue;
     state.avisos[g.cancel.key] = Date.now(); saveState();
     try {
-      await sock.sendMessage(groupId, { text: '@all ' + g.cancel.text, mentionAll: true, contextInfo: { nonJidMentions: 1 } });
+      await sock.sendMessage(groupId, { text: '@all ' + g.cancel.text + (g.cancel.title ? '\\n\\n' + g.cancel.title : ''), mentionAll: true, contextInfo: { nonJidMentions: 1 } });
       try { await sock.sendPresenceUpdate('unavailable'); } catch (e) {}
       log('Aviso de cancelamento enviado (' + g.id + ').');
     } catch (e) { logErr('Não consegui mandar o cancelamento:', e.message); }

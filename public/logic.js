@@ -871,7 +871,7 @@
       /* Quarta (jogo fechado): se às 17h não tiver 12 confirmados, o vôlei é cancelado e o robô avisa no grupo. */
       let cancel = null;
       if (g.meta.private && g.frozen && d.confirmed.length < MIN_QUARTA) {
-        cancel = { key: g.meta.id + ':cancelado', text: `🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐\nVôlei cancelado: não completou ${MIN_QUARTA} pessoas até as ${g.meta.cutoff}.` };
+        cancel = { key: g.meta.id + ':cancelado', text: `vôlei cancelado pois não atingiu o número mínimo de pessoas`, title: `🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐` };
         teams = null;
       }
       out.push({ cancel, vagas, teams, promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max, text: lines.join('\n') });
