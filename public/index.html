@@ -251,6 +251,10 @@ body.login-mode .tabs { display: none; }
 body.login-mode #hdr .swallow { display: none; }
 .login-card .field { margin-bottom: 14px; }
 .login-card { margin-top: 8px; }
+.sw { position: relative; overflow: hidden; padding: 0 !important; }
+.sw-c { display: flex; align-items: center; gap: 10px; padding: 8px 0; background: var(--card, #fff); position: relative; z-index: 1; transition: transform .2s ease; touch-action: pan-y; }
+.sw.open .sw-c { transform: translateX(-72px); }
+.sw-del { position: absolute; right: 0; top: 0; bottom: 0; width: 72px; border: 0; background: #c62828; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .ci-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
 .ci-btns .btn { min-height: 56px; font-size: 1.1rem; font-weight: 800; color: #fff; border: 0; }
 .ci-in { background: #1f9d55; } .ci-out { background: #c62828; }
@@ -646,7 +650,7 @@ function renderLista() {
     return `<div class="card"><h2>Seu check-in</h2><p class="hint">${st}</p>
       <div class="ci-btns"><button class="btn ci-in" data-act="checkin"${canIn ? '' : ' disabled'}>${!inList && D.confirmed.length >= S.settings.max ? 'Lista de espera' : 'Check-in'}</button><button class="btn ci-out" data-act="desistir"${canOut ? '' : ' disabled'}>Desistir</button></div></div>`;
   }
-  const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; const rm = !isAdmin && x.by === me && id !== me && p && (p.guest || x.asGuest) ? `<button class="link" style="color:#940B29" data-unguest="${id}">tirar</button>` : ''; return `<li>${avatar(p)}<span class="nm">${h(nameOf(p))} </span>${by || t}${rm}</li>`; };
+  const li = id => { const x = S.presences.find(y => y.pid === id) || {}; const p = P(id); const by = x.by && x.by !== id && P(x.by) ? `<span class="by">por ${h(P(x.by).name)}</span>` : ''; const t = x.ts ? `<span class="by">${fmtTime(x.ts)}</span>` : ''; const rm = !isAdmin && x.by === me && id !== me && p && (p.guest || x.asGuest) ? `<button class="link" style="color:#940B29" data-unguest="${id}">tirar</button>` : ''; const inner = `${avatar(p)}<span class="nm">${h(nameOf(p))} </span>${by || t}${rm}`; if (!isAdmin) return `<li>${inner}</li>`; return `<li class="sw"><div class="sw-c">${inner}</div><button type="button" class="sw-del" data-rmlist="${id}" aria-label="Tirar ${h(nameOf(p))} da lista"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></li>`; };
   return `${demoNote}${renderWho()}${lockMsg}
     <p class="hint" style="padding:0 4px">Check-in por ordem de chegada: as <b>${D.open} vagas</b> vão pra quem marcar primeiro${prio ? ' (quem tem <span class="paid">pago</span> passa na frente)' : ''}. Depois disso, entra na lista de espera, que sobe sozinha se alguém desistir até as ${h(S.current ? S.current.cutoff : '17:00')} do dia do jogo, quando a lista fecha.</p>
 ${myCaixinha()}${myCheckin()}${false ? `<div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
@@ -962,6 +966,22 @@ document.addEventListener('submit', async e => {
 });
 function closeSheet() { $('#sheet').hidden = true; $('#sheet').innerHTML = ''; }
 
+/* ---------- Arrastar pra esquerda (admin): mostra a lixeira ---------- */
+(function () {
+  let x0 = null, y0 = null, item = null;
+  document.addEventListener('touchstart', e => { const li = e.target.closest('.sw'); if (!li) return; item = li; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!item || x0 == null) return;
+    const dx = e.touches[0].clientX - x0, dy = e.touches[0].clientY - y0;
+    if (Math.abs(dx) < 25 || Math.abs(dy) > Math.abs(dx)) return;
+    document.querySelectorAll('.sw.open').forEach(o => { if (o !== item) o.classList.remove('open'); });
+    item.classList.toggle('open', dx < 0); x0 = null;
+  }, { passive: true });
+  document.addEventListener('touchend', () => { item = null; x0 = null; }, { passive: true });
+  /* no computador: clicar no nome abre/fecha a lixeira */
+  document.addEventListener('click', e => { const c = e.target.closest('.sw-c'); if (c && !('ontouchstart' in window)) c.parentElement.classList.toggle('open'); });
+})();
+
 /* ---------- Eventos ---------- */
 let toastTimer;
 function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, err || msg.length > 40 ? 4500 : 2200); }
@@ -989,6 +1009,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.paid) return act({ type: 'togglePaid', id: t.dataset.paid });
   if (t.dataset.punpick) { const i = document.getElementById('pun-name'); i.value = t.dataset.punpick; document.getElementById('pun-sug').innerHTML = ''; return; }
   if (t.dataset.copypix) { const k = t.dataset.copypix; const done = () => toast('Chave Pix copiada!'); if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(k).then(done, () => { prompt('Copie a chave Pix:', k); }); else { const ta = document.createElement('textarea'); ta.value = k; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} ta.remove(); } return; }
+  if (t.dataset.rmlist) { const pid = t.dataset.rmlist; return openConfirm(`Tirar ${nameOf(P(pid))} da lista deste jogo? (não conta como desistência)`, 'Tirar', () => act({ type: 'leave', pid }, 'Removido da lista.')); }
   if (t.dataset.cxdel) return act({ type: 'caixaDel', id: t.dataset.cxdel }, 'Apagado.');
   if (t.dataset.caixinha) return act({ type: 'toggleCaixinha', id: t.dataset.caixinha });
   if (t.dataset.pagok) return act({ type: 'pagAprovar', pid: t.dataset.pagok, month: LG.monthKey(S.current ? S.current.startAt : now()) }, 'Pagamento aprovado.');
