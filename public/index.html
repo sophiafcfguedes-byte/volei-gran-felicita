@@ -254,7 +254,8 @@ body.login-mode #hdr .swallow { display: none; }
 .sw { position: relative; overflow: hidden; padding: 0 !important; }
 .sw-c { display: flex; align-items: center; gap: 10px; padding: 8px 0; background: var(--card, #fff); position: relative; z-index: 1; transition: transform .2s ease; touch-action: pan-y; }
 .sw.open .sw-c { transform: translateX(-72px); }
-.sw-del { position: absolute; right: 0; top: 0; bottom: 0; width: 72px; border: 0; background: #c62828; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.sw-del { position: absolute; right: 0; top: 0; bottom: 0; width: 72px; border: 0; background: #c62828; display: flex; align-items: center; justify-content: center; cursor: pointer; transform: translateX(100%); visibility: hidden; transition: transform .2s ease, visibility .2s; }
+.sw.open .sw-del { transform: translateX(0); visibility: visible; }
 .ci-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
 .ci-btns .btn { min-height: 56px; font-size: 1.1rem; font-weight: 800; color: #fff; border: 0; }
 .ci-in { background: #1f9d55; } .ci-out { background: #c62828; }
