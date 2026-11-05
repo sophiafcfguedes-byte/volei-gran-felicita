@@ -176,7 +176,8 @@ http.createServer(async (req, res) => {
       for (const e of ['pdf', 'png', 'jpg']) { try { fs.unlinkSync(path.join(UPLOADS, mk, base + '.' + e)); } catch (er) {} }
       fs.writeFileSync(file, buf, { mode: 0o600 });
       if (gName) {
-        const rg = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: gName });
+        const bringer = state.players.find(x => x.id === pid);
+        const rg = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: [gName, bringer && bringer.fullName, bringer && bringer.name] });
         state.pagGuests ||= {}; state.pagGuests[mk] ||= {};
         state.pagGuests[mk][gKey] = { ts: now, st: rg.st, by: pid, name: gName, valor: rg.valor || 0 };
         version = Date.now(); save();
