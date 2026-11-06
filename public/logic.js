@@ -175,7 +175,9 @@
     const pm = playerMap(s);
     /* Frequência conta só os jogos abertos (segunda e quinta); jogo fechado (quarta) não soma. */
     if (!v.current.private) d.confirmed.forEach(pid => { if (pm[pid]) pm[pid].freq = (pm[pid].freq || 0) + 1; });
-    s.history.unshift({ id, confirmed: d.confirmed });
+    /* guarda os nomes também (convidados são apagados depois do jogo) */
+    const pres = v.presences || [];
+    s.history.unshift({ id, private: !!v.current.private, confirmed: d.confirmed, names: d.confirmed.map(pid => labelIn(pm, pres, pid)), endAt: v.current.endAt });
     if (s.history.length > 90) s.history.length = 90;
   }
 
@@ -808,7 +810,7 @@
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => (!b.private || priv) && b.pid === meId); // cada um só recebe a própria suspensão
     delete settings.moradores;
-    return Object.assign({}, s, { players, games, settings, bans, pag: (() => { const o = {}; for (const [mk, m] of Object.entries(s.pag || {})) if (m[meId]) o[mk] = { [meId]: { st: m[meId].st, why: m[meId].why || '', ts: m[meId].ts } }; return o; })(), suggestions: [], caixaV: caixaView(s), pagGuests: undefined, caixa: undefined, reservas: undefined, portaria: portaria(s, games), acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
+    return Object.assign({}, s, { players, games, settings, bans, pag: (() => { const o = {}; for (const [mk, m] of Object.entries(s.pag || {})) if (m[meId]) o[mk] = { [meId]: { st: m[meId].st, why: m[meId].why || '', ts: m[meId].ts } }; return o; })(), suggestions: [], history: (s.history || []).filter(x => !x.private || priv).slice(0, 3), caixaV: caixaView(s), pagGuests: undefined, caixa: undefined, reservas: undefined, portaria: portaria(s, games), acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
   }
 
   /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */
