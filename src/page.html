@@ -617,7 +617,7 @@ function renderLista() {
   /* Até abrir o check-in do próximo jogo, mostra quem estava confirmado no último (pra conferir quem faltou). */
   function ultimoJogo() {
     if (!lk.locked || lk.reason !== 'notOpen') return '';
-    const hz = (S.history || []).filter(x => x.names && (!x.private || (S.current && S.current.private) || isAdmin))[0];
+    const hz = (S.history || []).map(x => x.names ? x : Object.assign({}, x, { names: (x.confirmed || []).map(id => P(id) ? P(id).name : 'convidado') })).filter(x => x.names.length && (!x.private || (S.current && S.current.private) || isAdmin))[0];
     if (!hz) return '';
     const q = spDate(Date.parse(hz.id + 'T12:00:00-03:00'));
     return `<div class="card"><div class="sec-h"><h2>Último jogo · ${LG.DAYS[q.wd]} ${q.d}/${q.m + 1}</h2><span class="muted">${hz.names.length} confirmados</span></div>
