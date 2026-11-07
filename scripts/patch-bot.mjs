@@ -83,6 +83,19 @@ async function avisosTick() {
       if (old) { await wait(1500); try { await sock.sendMessage(groupId, { delete: old }); } catch (e) { logErr('Não consegui apagar a lista anterior:', e.message); } }
     } catch (e) { logErr('Não consegui mandar a lista:', e.message); }
   }
+  // Abriu o check-in: "@all check-in aberto" no grupo do jogo (uma vez).
+  for (const g of data.games || []) {
+    const groupId = rt[g.group]?.groupId;
+    if (!groupId || !g.aberto || state.avisos[g.aberto.key]) continue;
+    state.avisos[g.aberto.key] = Date.now(); saveState();
+    try {
+      let text = '@all ' + g.aberto.text;
+      if (AVISOS.publicUrl) text += '\\n' + AVISOS.publicUrl;
+      await sock.sendMessage(groupId, { text, mentionAll: true, contextInfo: { nonJidMentions: 1 } });
+      try { await sock.sendPresenceUpdate('unavailable'); } catch (e) {}
+      log('Aviso de check-in aberto enviado (' + g.id + ').');
+    } catch (e) { logErr('Não consegui mandar o check-in aberto:', e.message); }
+  }
   // Quarta sem 12 pessoas às 17h: "@all vôlei cancelado" no grupo da quarta (uma vez).
   for (const g of data.games || []) {
     const groupId = rt[g.group]?.groupId;

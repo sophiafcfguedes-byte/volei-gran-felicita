@@ -19,6 +19,7 @@ const log = m => console.log(new Date().toLocaleString('pt-BR', { timeZone: 'Ame
     if (g.vagas && !sent[g.vagas.key]) pend.push(g.vagas.key);
     if (g.teams && !sent[g.teams.key]) pend.push(g.teams.key);
     if (g.cancel && !sent[g.cancel.key]) pend.push(g.cancel.key);
+    if (g.aberto && !sent[g.aberto.key]) pend.push(g.aberto.key);
   }
   let mark = {}; try { mark = JSON.parse(fs.readFileSync(MARK, 'utf8')); } catch (e) {}
   const active = sh('systemctl is-active volei-bot') === 'active', now = Date.now();
