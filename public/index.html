@@ -158,7 +158,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .conf li:last-child { border-bottom: 0; }
 .conf.fx li::before { content: "★"; color: var(--ball); width: 1.8em; text-align: right; flex: none; }
 .conf.fx { padding-bottom: 6px; border-bottom: 2px dashed var(--line); }
-ol.conf li::before { counter-increment: c; content: counter(c); font-family: var(--display); color: var(--court); width: 1.8em; text-align: right; font-variant-numeric: tabular-nums; flex: none; }
+ol.conf li::before { counter-increment: c; content: counter(c); font-family: inherit; font-weight: 800; font-size: 1.05em; color: var(--court); width: 1.8em; text-align: right; font-variant-numeric: tabular-nums; flex: none; }
 ol.conf.wait li::before { color: var(--warn); }
 .conf .nm { flex: 1; min-width: 0; }
 .by { font-size: .78rem; color: var(--muted); }
