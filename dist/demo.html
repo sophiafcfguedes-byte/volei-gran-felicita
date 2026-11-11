@@ -316,9 +316,9 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   const SETTINGS_VERSION = 8;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'caixaSaldo', 'pagGuestSet', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'caixaSaldo', 'pagGuestSet', 'guestApprove', 'guestReject', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
-  const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
+  const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'guestApprove', 'guestReject', 'draw', 'role', 'resetPresences']);
 
   const WED = { day: 3, start: '19:40', end: '21:00', openDay: 2, openTime: '12:00', max: 15, teams: 2, private: true, fixed: false, guests: false };
   function defaultSettings() {
@@ -390,12 +390,12 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     return {
       settings: Object.assign({}, s.settings, { max: g.meta.max, teams: g.meta.teams }),
       players: s.players, current: g.meta,
-      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log, frozen: g.frozen || null, promos: g.promos || []
+      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log, frozen: g.frozen || null, promos: g.promos || [], guestReq: g.guestReq || []
     };
   }
   function writeBack(s, id, v) {
     const g = s.games[id];
-    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log; g.frozen = v.frozen || null; g.promos = v.promos || [];
+    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log; g.frozen = v.frozen || null; g.promos = v.promos || []; g.guestReq = v.guestReq || [];
   }
 
   /* Ajusta estados antigos, fecha jogos que já acabaram (+1 na frequência
@@ -972,9 +972,27 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         }
         return ok;
       }
+      case 'guestApprove': case 'guestReject': {
+        const i = (v.guestReq || []).findIndex(x => x.id === a.id);
+        if (i < 0) return fail('Pedido não encontrado.');
+        const rq = v.guestReq.splice(i, 1)[0];
+        if (a.type === 'guestReject') return ok;
+        let p = s.players.find(x => fold(x.name) === fold(rq.name));
+        if (!p) { p = { id: newId(s, 'c'), name: rq.name, skill: rq.skill, guest: true, fixed: false, priv: false, photo: null, freq: 0, cpf: rq.cpf, fullName: rq.cpf ? rq.name : '' }; s.players.push(p); }
+        if (!v.presences.some(x => x.pid === p.id)) v.presences.push({ pid: p.id, by: rq.by, ts: now, asGuest: !p.guest });
+        return ok;
+      }
       case 'addGuest': {
-        if (!meta.guests && !admin) return fail('Esse jogo não aceita convidados.');
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
+        /* Jogo fechado (quarta): convidado vira pedido e só entra na lista quando um admin aprovar. */
+        if (!meta.guests && !admin) {
+          const nm = cleanName(a.name);
+          if (nm.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
+          if (!me) return fail('Escolha seu nome antes.');
+          v.guestReq = (v.guestReq || []).filter(x => !(x.by === me.id && fold(x.name) === fold(nm)));
+          v.guestReq.push({ id: newId(s, 'r'), name: nm, skill: clampSkill(a.skill), cpf: String(a.cpf || '').replace(/\D/g, ''), by: me.id, ts: now });
+          return ok;
+        }
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva o nome do convidado.');
         if (!admin && addedByMe() >= limit) return fail(limitMsg);
@@ -1117,7 +1135,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     const me = s.players.find(p => p.id === meId);
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
-    for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
+    for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g.guestReq && g.guestReq.length ? Object.assign({}, g, { guestReq: g.guestReq.filter(x => x.by === meId).map(x => ({ id: x.id, name: x.name, by: x.by, ts: x.ts })) }) : g;
     const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.age; delete q.pin; if (p.id !== meId) { delete q.phone; delete q.cpf; delete q.fullName; } if (p.id !== meId) { delete q.morador; delete q.cadastrado; delete q.caixinha; delete q.caixinhaAte; } delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => (!b.private || priv) && b.pid === meId); // cada um só recebe a própria suspensão
@@ -1429,7 +1447,7 @@ async function addGuestFlow() {
     } catch (e) { return toast('Não consegui ler esse arquivo.', true); }
   }
   const morador = !!(P(me) && P(me).morador);
-  return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill'), cpf: val('g-cpf') }, morador ? 'Convidado adicionado. Você está responsável por liberar a pessoa na portaria.' : 'Convidado adicionado.', ['g-name', 'g-cpf']).then(ok => { if (ok && el) el.value = ''; return ok; });
+  return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill'), cpf: val('g-cpf') }, S.current && S.current.guests === false && !isAdmin ? 'Pedido enviado! O convidado entra na lista quando um admin aprovar.' : morador ? 'Convidado adicionado. Você está responsável por liberar a pessoa na portaria.' : 'Convidado adicionado.', ['g-name', 'g-cpf']).then(ok => { if (ok && el) el.value = ''; return ok; });
 }
 async function fileToData(f) {
   if (f.size > 12e6) throw new Error('grande');
@@ -1527,6 +1545,15 @@ function renderLista() {
     return `<div class="card"><div class="sec-h"><h2>Último jogo · ${LG.DAYS[q.wd]} ${q.d}/${q.m + 1}</h2><span class="muted">${hz.names.length} confirmados</span></div>
       <ol class="conf">${hz.names.map(n => `<li><span class="nm">${h(n)}</span></li>`).join('')}</ol></div>`;
   }
+  /* Quarta: pedidos de convidado esperando aprovação (admin aprova/recusa; quem pediu vê os seus). */
+  function guestReqCard() {
+    const g = S.current && RAW.games[S.current.id], req = (g && g.guestReq) || [];
+    if (!req.length) return '';
+    return `<div class="card"><h2>Convidados aguardando aprovação</h2>
+      ${req.map(r => `<div class="role-row" style="flex-wrap:wrap"><span class="nm" style="flex:1">${h(r.name)} <span class="by">(convidado de ${h(P(r.by) ? P(r.by).name : '?')})</span></span>
+        ${isAdmin ? `<button class="btn btn-primary btn-sm" data-gok="${r.id}">Aprovar</button><button class="btn btn-danger btn-sm" data-gno="${r.id}">Recusar</button>` : '<span class="ac-st ac-cad">Aguardando</span>'}</div>`).join('')}
+    </div>`;
+  }
   function myCaixinha() {
     const p = me && P(me);
     const pix = '<button type="button" class="pix-copy" data-copypix="637b5fdd-3f6e-42f9-ae1e-fb2e547281b2"><span class="pix-l">Chave Pix (toque para copiar)</span><span class="pix-k">637b5fdd-3f6e-42f9-ae1e-fb2e547281b2</span></button>';
@@ -1570,7 +1597,7 @@ function renderLista() {
 ${ultimoJogo()}${myCaixinha()}${myCheckin()}${false ? `<div class="card search"><label class="lbl" for="list-q">Procurar na lista</label><input type="search" id="list-q" placeholder="Digite um nome…" autocomplete="off" enterkeyhint="search"></div>
     ${section('Jogadores', members)}
     ${section('Convidados', guests)}` : ''}
-    ${edit && allowGuests && S.settings.guestLimit ? `<div class="card"><h2>Trazer um convidado</h2>
+    ${guestReqCard()}${edit && S.settings.guestLimit ? `<div class="card"><h2>Trazer um convidado</h2>${allowGuests ? '' : '<p class="hint">Neste jogo o convidado só entra na lista depois que um admin aprovar.</p>'}
       <div class="field"><label for="g-name">Nome e sobrenome</label><input type="text" id="g-name" maxlength="40" autocomplete="off" placeholder="Nome e sobrenome"></div>
       <div class="field"><label for="g-skill">Qual o nível do seu convidado, de 0 a 5 (0 = iniciante, 5 = muito bom)?</label><select id="g-skill">${opts(SKILLS, 2.5)}</select></div>
       ${P(me) && P(me).morador ? '' : `<div class="field"><label for="g-cpf">CPF do convidado (obrigatório, pra liberar na portaria)</label><input type="text" id="g-cpf" inputmode="numeric" maxlength="14" autocomplete="off" placeholder="000.000.000-00"></div>`}
@@ -1943,6 +1970,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.rename) { const q = P(t.dataset.rename); const nv = q && prompt('Novo nome de ' + q.name + ':', q.name); if (!nv || nv.trim() === q.name) return; return act(Object.assign({ type: 'savePlayer' }, q, { name: nv.trim() }), 'Nome alterado.'); }
   if (t.dataset.gpagok || t.dataset.gpagno) return act({ type: 'pagGuestSet', key: t.dataset.gpagok || t.dataset.gpagno, st: t.dataset.gpagok ? 'ok' : 'recusado', month: LG.monthKey(S.current ? S.current.startAt : now()) }, t.dataset.gpagok ? 'Aprovado.' : 'Recusado.');
   if (t.dataset.vergcx) { const w = window.open('', '_blank'); fetch('api/comprovante?month=' + LG.monthKey(S.current ? S.current.startAt : now()) + '&guest=' + encodeURIComponent(t.dataset.vergcx), { headers: { 'x-admin-token': token } }).then(r => r.ok ? r.blob() : Promise.reject()).then(b => { const u = URL.createObjectURL(b); if (w) w.location = u; else location.href = u; }).catch(() => { if (w) w.close(); toast('Não achei o comprovante.', true); }); return; }
+  if (t.dataset.gok || t.dataset.gno) return act({ type: t.dataset.gok ? 'guestApprove' : 'guestReject', id: t.dataset.gok || t.dataset.gno }, t.dataset.gok ? 'Convidado aprovado e colocado na lista.' : 'Pedido recusado.');
   if (t.dataset.cxdel) return act({ type: 'caixaDel', id: t.dataset.cxdel }, 'Apagado.');
   if (t.dataset.caixinha) return act({ type: 'toggleCaixinha', id: t.dataset.caixinha });
   if (t.dataset.pagok) return act({ type: 'pagAprovar', pid: t.dataset.pagok, month: LG.monthKey(S.current ? S.current.startAt : now()) }, 'Pagamento aprovado.');

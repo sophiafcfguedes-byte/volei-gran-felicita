@@ -11,9 +11,9 @@
   const SETTINGS_VERSION = 8;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'caixaSaldo', 'pagGuestSet', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'caixaSaldo', 'pagGuestSet', 'guestApprove', 'guestReject', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
-  const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
+  const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'guestApprove', 'guestReject', 'draw', 'role', 'resetPresences']);
 
   const WED = { day: 3, start: '19:40', end: '21:00', openDay: 2, openTime: '12:00', max: 15, teams: 2, private: true, fixed: false, guests: false };
   function defaultSettings() {
@@ -85,12 +85,12 @@
     return {
       settings: Object.assign({}, s.settings, { max: g.meta.max, teams: g.meta.teams }),
       players: s.players, current: g.meta,
-      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log, frozen: g.frozen || null, promos: g.promos || []
+      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log, frozen: g.frozen || null, promos: g.promos || [], guestReq: g.guestReq || []
     };
   }
   function writeBack(s, id, v) {
     const g = s.games[id];
-    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log; g.frozen = v.frozen || null; g.promos = v.promos || [];
+    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log; g.frozen = v.frozen || null; g.promos = v.promos || []; g.guestReq = v.guestReq || [];
   }
 
   /* Ajusta estados antigos, fecha jogos que já acabaram (+1 na frequência
@@ -667,9 +667,27 @@
         }
         return ok;
       }
+      case 'guestApprove': case 'guestReject': {
+        const i = (v.guestReq || []).findIndex(x => x.id === a.id);
+        if (i < 0) return fail('Pedido não encontrado.');
+        const rq = v.guestReq.splice(i, 1)[0];
+        if (a.type === 'guestReject') return ok;
+        let p = s.players.find(x => fold(x.name) === fold(rq.name));
+        if (!p) { p = { id: newId(s, 'c'), name: rq.name, skill: rq.skill, guest: true, fixed: false, priv: false, photo: null, freq: 0, cpf: rq.cpf, fullName: rq.cpf ? rq.name : '' }; s.players.push(p); }
+        if (!v.presences.some(x => x.pid === p.id)) v.presences.push({ pid: p.id, by: rq.by, ts: now, asGuest: !p.guest });
+        return ok;
+      }
       case 'addGuest': {
-        if (!meta.guests && !admin) return fail('Esse jogo não aceita convidados.');
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
+        /* Jogo fechado (quarta): convidado vira pedido e só entra na lista quando um admin aprovar. */
+        if (!meta.guests && !admin) {
+          const nm = cleanName(a.name);
+          if (nm.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
+          if (!me) return fail('Escolha seu nome antes.');
+          v.guestReq = (v.guestReq || []).filter(x => !(x.by === me.id && fold(x.name) === fold(nm)));
+          v.guestReq.push({ id: newId(s, 'r'), name: nm, skill: clampSkill(a.skill), cpf: String(a.cpf || '').replace(/\D/g, ''), by: me.id, ts: now });
+          return ok;
+        }
         const name = cleanName(a.name);
         if (name.length < 2) return fail('Escreva o nome do convidado.');
         if (!admin && addedByMe() >= limit) return fail(limitMsg);
@@ -812,7 +830,7 @@
     const me = s.players.find(p => p.id === meId);
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
-    for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g;
+    for (const [id, g] of Object.entries(s.games)) if (!g.meta.private || priv) games[id] = g.guestReq && g.guestReq.length ? Object.assign({}, g, { guestReq: g.guestReq.filter(x => x.by === meId).map(x => ({ id: x.id, name: x.name, by: x.by, ts: x.ts })) }) : g;
     const players = s.players.map(p => { const q = Object.assign({}, p); q.hasPin = !!p.pin; delete q.skill; delete q.age; delete q.pin; if (p.id !== meId) { delete q.phone; delete q.cpf; delete q.fullName; } if (p.id !== meId) { delete q.morador; delete q.cadastrado; delete q.caixinha; delete q.caixinhaAte; } delete q.fails; delete q.lockUntil; return q; });
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => (!b.private || priv) && b.pid === meId); // cada um só recebe a própria suspensão
