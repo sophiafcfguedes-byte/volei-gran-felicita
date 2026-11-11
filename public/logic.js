@@ -563,7 +563,7 @@
         const mk = a.month || monthKey(now);
         s.pag ||= {}; s.pag[mk] ||= {};
         const cur = s.pag[mk][a.pid] || { ts: now };
-        s.pag[mk][a.pid] = Object.assign(cur, a.type === 'pagAprovar' ? { st: 'ok', why: '' } : { st: 'recusado', why: String(a.why || 'Comprovante recusado pela comissão.').slice(0, 200) });
+        s.pag[mk][a.pid] = Object.assign(cur, a.type === 'pagAprovar' ? { st: 'ok', why: '', okTs: now } : { st: 'recusado', why: String(a.why || 'Comprovante recusado pela comissão.').slice(0, 200) });
         return ok;
       }
       case 'vaquinhaAte': { const p = pm[a.id]; if (p && !p.guest) p.caixinhaAte = /^\d{4}-\d{2}$/.test(a.month || '') ? a.month : ''; return ok; }
@@ -586,6 +586,7 @@
         const e = ((s.pagGuests || {})[a.month] || {})[a.key];
         if (!e) return fail('Comprovante não encontrado.');
         e.st = a.st === 'ok' ? 'ok' : 'recusado';
+        if (e.st === 'ok') e.okTs = now;
         if (e.st === 'ok' && !(e.valor >= 5)) e.valor = 5;
         return ok;
       }
@@ -827,7 +828,7 @@
     /* Admin pode acertar o saldo: a partir daí só soma o que vier depois. */
     const base = (s.caixa && s.caixa.base) || { valor: CAIXA_INICIAL, ts: CAIXA_DESDE };
     let n = 0, tot = 0;
-    for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && (e.ts || 0) >= base.ts) { n++; tot += e.valor >= VALOR_VAQUINHA ? e.valor : VALOR_VAQUINHA; } /* soma o valor do comprovante (mínimo R$ 5) */
+    for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && Math.max(e.ts || 0, e.okTs || 0) >= base.ts) { n++; tot += e.valor >= VALOR_VAQUINHA ? e.valor : VALOR_VAQUINHA; } /* soma o valor do comprovante (mínimo R$ 5) */
     const lanc = ((s.caixa || {}).lanc || []).map(x => ({ id: x.id, ts: x.ts, desc: x.desc, valor: x.valor }));
     const soma = lanc.filter(x => x.ts >= base.ts).reduce((t, x) => t + x.valor, 0);
     return { inicial: base.valor, comprovantes: n, entradaVaquinha: Math.round(tot * 100) / 100, lanc, saldo: Math.round((base.valor + tot + soma) * 100) / 100 };

@@ -868,7 +868,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         const mk = a.month || monthKey(now);
         s.pag ||= {}; s.pag[mk] ||= {};
         const cur = s.pag[mk][a.pid] || { ts: now };
-        s.pag[mk][a.pid] = Object.assign(cur, a.type === 'pagAprovar' ? { st: 'ok', why: '' } : { st: 'recusado', why: String(a.why || 'Comprovante recusado pela comissão.').slice(0, 200) });
+        s.pag[mk][a.pid] = Object.assign(cur, a.type === 'pagAprovar' ? { st: 'ok', why: '', okTs: now } : { st: 'recusado', why: String(a.why || 'Comprovante recusado pela comissão.').slice(0, 200) });
         return ok;
       }
       case 'vaquinhaAte': { const p = pm[a.id]; if (p && !p.guest) p.caixinhaAte = /^\d{4}-\d{2}$/.test(a.month || '') ? a.month : ''; return ok; }
@@ -891,6 +891,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         const e = ((s.pagGuests || {})[a.month] || {})[a.key];
         if (!e) return fail('Comprovante não encontrado.');
         e.st = a.st === 'ok' ? 'ok' : 'recusado';
+        if (e.st === 'ok') e.okTs = now;
         if (e.st === 'ok' && !(e.valor >= 5)) e.valor = 5;
         return ok;
       }
@@ -1132,7 +1133,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     /* Admin pode acertar o saldo: a partir daí só soma o que vier depois. */
     const base = (s.caixa && s.caixa.base) || { valor: CAIXA_INICIAL, ts: CAIXA_DESDE };
     let n = 0, tot = 0;
-    for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && (e.ts || 0) >= base.ts) { n++; tot += e.valor >= VALOR_VAQUINHA ? e.valor : VALOR_VAQUINHA; } /* soma o valor do comprovante (mínimo R$ 5) */
+    for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && Math.max(e.ts || 0, e.okTs || 0) >= base.ts) { n++; tot += e.valor >= VALOR_VAQUINHA ? e.valor : VALOR_VAQUINHA; } /* soma o valor do comprovante (mínimo R$ 5) */
     const lanc = ((s.caixa || {}).lanc || []).map(x => ({ id: x.id, ts: x.ts, desc: x.desc, valor: x.valor }));
     const soma = lanc.filter(x => x.ts >= base.ts).reduce((t, x) => t + x.valor, 0);
     return { inicial: base.valor, comprovantes: n, entradaVaquinha: Math.round(tot * 100) / 100, lanc, saldo: Math.round((base.valor + tot + soma) * 100) / 100 };
@@ -1675,11 +1676,11 @@ function renderCaixinha() {
       <p class="hint">Soma sozinha o valor de cada comprovante da vaquinha aprovado.${C.comprovantes ? ` Neste período: ${C.comprovantes} comprovante${C.comprovantes > 1 ? 's' : ''} (${brl(C.entradaVaquinha)}).` : ''}</p></div>
     ${isAdmin ? `<div class="card"><h2>Lançar gasto ou entrada</h2>
       <div class="field"><label for="cx-desc">Com o que foi</label><input type="text" id="cx-desc" maxlength="80" placeholder="Ex.: bola nova"></div>
-      <div class="grid2"><div class="field"><label for="cx-val">Valor (R$)</label><input type="text" id="cx-val" inputmode="decimal" placeholder="0,00"></div>
+      <div class="grid2"><div class="field"><label for="cx-val">Valor (R$)</label><input type="text" id="cx-val" inputmode="numeric" placeholder="0,00"></div>
       <div class="field"><label for="cx-tipo">Tipo</label><select id="cx-tipo"><option value="gasto">Gasto</option><option value="entrada">Entrada</option></select></div></div>
       <button class="btn btn-primary" data-act="caixa-add">Lançar</button></div>
     <div class="card"><h2>Acertar saldo</h2><p class="hint">Use se o saldo do app estiver diferente da conta. A partir daí ele continua somando sozinho.</p>
-      <div class="field"><label for="cx-saldo">Saldo correto (R$)</label><input type="text" id="cx-saldo" inputmode="decimal" placeholder="0,00"></div>
+      <div class="field"><label for="cx-saldo">Saldo correto (R$)</label><input type="text" id="cx-saldo" inputmode="numeric" placeholder="0,00"></div>
       <button class="btn btn-ghost" data-act="caixa-saldo">Acertar saldo</button></div>` : ''}
     <div class="card"><h2>Movimentações</h2>
       ${C.lanc.length ? C.lanc.map(x => `<div class="res-row"><span class="hr" style="min-width:48px">${dm(x.ts)}</span><span class="nm" style="flex:1">${h(x.desc)}</span><b style="color:${x.valor < 0 ? '#c62828' : '#1f9d55'}">${brl(x.valor)}</b>${isAdmin ? `<button class="link" data-cxdel="${x.id}" data-confirm style="color:#940B29">apagar</button>` : ''}</div>`).join('') : '<p class="hint">Nenhum gasto lançado ainda.</p>'}
@@ -2053,6 +2054,12 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   if (e.target.id === 'who-q') filterWho(e.target.value);
   if (e.target.id === 'list-q') filterList();
+  /* Valores em R$: digita só números, a vírgula entra sozinha (ex.: 9007 → 90,07). */
+  if (e.target.id === 'cx-saldo' || e.target.id === 'cx-val') {
+    const d = e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 9);
+    const c = d.padStart(3, '0');
+    e.target.value = d ? (c.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + c.slice(-2)) : '';
+  }
   if (e.target.id === 'pun-name') {
     const q = norm(e.target.value), box = document.getElementById('pun-sug');
     const hits = q ? S.players.filter(p => !p.guest && norm(p.name).includes(q)).sort(byName).slice(0, 6) : [];
