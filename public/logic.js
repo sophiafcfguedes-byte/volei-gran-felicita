@@ -11,7 +11,7 @@
   const SETTINGS_VERSION = 8;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'caixaSaldo', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'caixaSaldo', 'pagGuestSet', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
@@ -572,6 +572,13 @@
         const raw = String(a.valor || '').replace(/[^\d,.]/g, ''); const v = Math.round(Number(raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw) * 100) / 100;
         if (!Number.isFinite(v) || raw === '') return fail('Valor inválido.');
         s.caixa ||= {}; s.caixa.base = { valor: v, ts: now };
+        return ok;
+      }
+      case 'pagGuestSet': {
+        const e = ((s.pagGuests || {})[a.month] || {})[a.key];
+        if (!e) return fail('Comprovante não encontrado.');
+        e.st = a.st === 'ok' ? 'ok' : 'recusado';
+        if (e.st === 'ok' && !(e.valor >= 5)) e.valor = 5;
         return ok;
       }
       case 'caixaDel': { if (s.caixa && s.caixa.lanc) s.caixa.lanc = s.caixa.lanc.filter(x => x.id !== a.id); return ok; }

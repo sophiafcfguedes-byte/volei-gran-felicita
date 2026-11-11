@@ -316,7 +316,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   const SETTINGS_VERSION = 8;
   const ADMIN_ONLY = new Set([
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
-    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'caixaSaldo', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
+    'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'caixaSaldo', 'pagGuestSet', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
   const GAME_ACTIONS = new Set(['join', 'leave', 'addGuest', 'draw', 'role', 'resetPresences']);
 
@@ -877,6 +877,13 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         const raw = String(a.valor || '').replace(/[^\d,.]/g, ''); const v = Math.round(Number(raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw) * 100) / 100;
         if (!Number.isFinite(v) || raw === '') return fail('Valor inválido.');
         s.caixa ||= {}; s.caixa.base = { valor: v, ts: now };
+        return ok;
+      }
+      case 'pagGuestSet': {
+        const e = ((s.pagGuests || {})[a.month] || {})[a.key];
+        if (!e) return fail('Comprovante não encontrado.');
+        e.st = a.st === 'ok' ? 'ok' : 'recusado';
+        if (e.st === 'ok' && !(e.valor >= 5)) e.valor = 5;
         return ok;
       }
       case 'caixaDel': { if (s.caixa && s.caixa.lanc) s.caixa.lanc = s.caixa.lanc.filter(x => x.id !== a.id); return ok; }
@@ -1584,6 +1591,21 @@ ${ultimoJogo()}${myCaixinha()}${myCheckin()}${false ? `<div class="card search">
 }
 
 /* Admin: impedir quem faltou de jogar o próximo jogo + lista de suspensões (faltas e desistências). */
+/* Admin: comprovantes que o app não conseguiu confirmar sozinho (jogadores e convidados), pra aprovar ou recusar. */
+function comprovantesCard() {
+  const mk = LG.monthKey(S.current ? S.current.startAt : now());
+  const pj = Object.entries((RAW.pag || {})[mk] || {}).filter(([pid, e]) => e.st === 'pendente' || e.st === 'recusado');
+  const pg = Object.entries((RAW.pagGuests || {})[mk] || {}).filter(([, e]) => e.st === 'pendente' || e.st === 'recusado');
+  if (!pj.length && !pg.length) return `<div class="card"><h2>Admin · Comprovantes em análise</h2><p class="hint">Nenhum comprovante esperando aprovação.</p></div>`;
+  const tag = st => st === 'recusado' ? '<span class="ac-st ac-err">Recusado</span>' : '<span class="ac-st ac-cad">Em análise</span>';
+  return `<div class="card"><h2>Admin · Comprovantes em análise</h2><p class="hint">O app não conseguiu confirmar sozinho. Veja o comprovante e aprove ou recuse.</p>
+    ${pj.map(([pid, e]) => `<div class="role-row" style="flex-wrap:wrap">${avatar(P(pid))}<span class="nm" style="flex:1">${h(P(pid) ? P(pid).name : '?')}<br><span class="by">${h(e.why || '')}</span></span>${tag(e.st)}
+      <div style="display:flex;gap:8px;width:100%;margin-top:6px"><button class="btn btn-ghost btn-sm" data-vercx="${pid}">Ver</button><button class="btn btn-primary btn-sm" data-pagok="${pid}">Aprovar</button>${e.st !== 'recusado' ? `<button class="btn btn-danger btn-sm" data-pagno="${pid}">Recusar</button>` : ''}</div></div>`).join('')}
+    ${pg.map(([k, e]) => `<div class="role-row" style="flex-wrap:wrap"><span class="nm" style="flex:1">${h(e.name || k)} <span class="by">(convidado de ${h(P(e.by) ? P(e.by).name : '?')})</span></span>${tag(e.st)}
+      <div style="display:flex;gap:8px;width:100%;margin-top:6px"><button class="btn btn-ghost btn-sm" data-vergcx="${h(k)}">Ver</button><button class="btn btn-primary btn-sm" data-gpagok="${h(k)}">Aprovar</button>${e.st !== 'recusado' ? `<button class="btn btn-danger btn-sm" data-gpagno="${h(k)}">Recusar</button>` : ''}</div></div>`).join('')}
+  </div>`;
+}
+
 function impedidosCard() {
   const list = (S.bans || []).slice().sort((x, y) => x.game.localeCompare(y.game));
   return `<div class="card"><h2>Admin · Impedidos de jogar o próximo jogo</h2>
@@ -1768,6 +1790,7 @@ function renderMais() {
       <p class="hint">Vagas e número de times de cada jogo ficam em <b>Dias de jogo</b>, acima.</p>
       <button class="btn btn-primary" data-act="save-settings">Salvar</button></div>
 
+    ${comprovantesCard()}
     <div class="card"><h2>Admin · Jogadores</h2>
       <div class="field"><label for="np-name">Novo jogador</label><input type="text" id="np-name" maxlength="40" placeholder="Nome"></div>
       <div class="grid2"><div class="field"><label for="np-skill">Nível</label><select id="np-skill">${opts(SKILLS, 2.5)}</select></div></div>
@@ -1775,11 +1798,11 @@ function renderMais() {
       <label class="check"><input type="checkbox" id="np-priv"> ${ICON.ball} Liberado pro vôlei de ${h(privLabel())}</label>
       <button class="btn btn-primary" data-act="add-player">Cadastrar</button>
       <details class="bulk"><summary>Cadastrar vários de uma vez</summary>
-        <p class="hint">Cole um nome por linha. Se quiser, coloque o nível no fim, de 0 a 5 (0 = iniciante, 5 = muito bom; ex.: <b>Ana 3,5</b>). Sem nível, fica 3 (Médio N1). Faça uma vez pras mulheres e outra pros homens.</p>
+        <p class="hint">Cole um nome por linha. Se quiser, coloque o nível no fim, de 0 a 5 (0 = iniciante, 5 = muito bom; ex.: <b>Ana 3,5</b>). Sem nível, fica 2,5.</p>
         <div class="field"><label for="bulk-text">Nomes</label><textarea id="bulk-text" placeholder="Ana 3,5&#10;Bia&#10;Carla 1"></textarea></div>
         <label class="check"><input type="checkbox" id="bulk-priv"> ${ICON.ball} Todos liberados pro vôlei de ${h(privLabel())}</label>
         <button class="btn btn-primary" data-act="bulk-add">Cadastrar todos</button></details>
-      <div>${players.map(q => `<div class="adm-player">${avatar(q)}<b>${h(nameOf(q))}</b>
+      <div>${players.map(q => `<div class="adm-player">${avatar(q)}<b>${h(nameOf(q))}</b>${q.guest ? '' : ` <button class="link" data-rename="${q.id}">editar nome</button>`}
         <div class="ctrls"><select data-edit="${q.id}" data-field="skill" aria-label="Nível de ${h(q.name)}">${opts(SKILLS, q.skill)}</select>
           <select data-edit="${q.id}" data-field="age" aria-label="Faixa etária de ${h(q.name)}">${opts(AGES, q.age || 0)}</select>
           ${q.guest || q.morador || q.fixed ? '' : `<button class="tog setter" aria-pressed="${!!q.caixinha}" data-caixinha="${q.id}" title="Marcado: já pagou, check-in liberado sem comprovante">vaquinha</button>${q.caixinha ? `<label class="by" style="display:inline-flex;gap:4px;align-items:center">desliga em <input type="month" data-vqate="${q.id}" value="${h(q.caixinhaAte || '')}" style="min-height:30px;padding:2px 6px"></label>` : ''}`}
@@ -1917,6 +1940,9 @@ document.addEventListener('click', async e => {
   if (t.dataset.punpick) { const i = document.getElementById('pun-name'); i.value = t.dataset.punpick; document.getElementById('pun-sug').innerHTML = ''; return; }
   if (t.dataset.copypix) { const k = t.dataset.copypix; const done = () => toast('Chave Pix copiada!'); if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(k).then(done, () => { prompt('Copie a chave Pix:', k); }); else { const ta = document.createElement('textarea'); ta.value = k; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} ta.remove(); } return; }
   if (t.dataset.rmlist) { const pid = t.dataset.rmlist; return openConfirm(`Tirar ${nameOf(P(pid))} da lista deste jogo? (não conta como desistência)`, 'Tirar', () => act({ type: 'leave', pid }, 'Removido da lista.')); }
+  if (t.dataset.rename) { const q = P(t.dataset.rename); const nv = q && prompt('Novo nome de ' + q.name + ':', q.name); if (!nv || nv.trim() === q.name) return; return act(Object.assign({ type: 'savePlayer' }, q, { name: nv.trim() }), 'Nome alterado.'); }
+  if (t.dataset.gpagok || t.dataset.gpagno) return act({ type: 'pagGuestSet', key: t.dataset.gpagok || t.dataset.gpagno, st: t.dataset.gpagok ? 'ok' : 'recusado', month: LG.monthKey(S.current ? S.current.startAt : now()) }, t.dataset.gpagok ? 'Aprovado.' : 'Recusado.');
+  if (t.dataset.vergcx) { const w = window.open('', '_blank'); fetch('api/comprovante?month=' + LG.monthKey(S.current ? S.current.startAt : now()) + '&guest=' + encodeURIComponent(t.dataset.vergcx), { headers: { 'x-admin-token': token } }).then(r => r.ok ? r.blob() : Promise.reject()).then(b => { const u = URL.createObjectURL(b); if (w) w.location = u; else location.href = u; }).catch(() => { if (w) w.close(); toast('Não achei o comprovante.', true); }); return; }
   if (t.dataset.cxdel) return act({ type: 'caixaDel', id: t.dataset.cxdel }, 'Apagado.');
   if (t.dataset.caixinha) return act({ type: 'toggleCaixinha', id: t.dataset.caixinha });
   if (t.dataset.pagok) return act({ type: 'pagAprovar', pid: t.dataset.pagok, month: LG.monthKey(S.current ? S.current.startAt : now()) }, 'Pagamento aprovado.');

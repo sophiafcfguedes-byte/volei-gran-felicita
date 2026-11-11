@@ -193,7 +193,8 @@ http.createServer(async (req, res) => {
     /* Admin vê o comprovante. */
     if (url.pathname === '/api/comprovante' && req.method === 'GET') {
       if (!isAdmin(req)) return send(res, 403, 'proibido', 'text/plain');
-      const mk = String(url.searchParams.get('month') || ''), pid = String(url.searchParams.get('pid') || '');
+      const mk = String(url.searchParams.get('month') || ''), gq = url.searchParams.get('guest');
+      const pid = gq ? 'g-' + crypto.createHash('sha1').update(String(gq)).digest('hex').slice(0, 16) : String(url.searchParams.get('pid') || '');
       if (!/^\d{4}-\d{2}$/.test(mk) || !/^[\w-]+$/.test(pid)) return send(res, 400, 'inválido', 'text/plain');
       for (const e of ['pdf', 'png', 'jpg']) {
         const f = path.join(UPLOADS, mk, pid + '.' + e);
