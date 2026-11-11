@@ -164,6 +164,10 @@ http.createServer(async (req, res) => {
       const ext = /pdf/.test(a.type || '') ? 'pdf' : /png/.test(a.type || '') ? 'png' : 'jpg';
       const buf = Buffer.from(String(a.data || '').replace(/^data:[^,]*,/, ''), 'base64');
       if (buf.length < 500 || buf.length > 6e6) return send(res, 200, { ok: false, error: 'Arquivo inválido ou grande demais (máx. 6 MB).' });
+      /* Mesmo arquivo de novo (de qualquer pessoa, no mês): não analisa outra vez. */
+      const hash = crypto.createHash('sha256').update(buf).digest('hex');
+      const dup = [state.pag, state.pagGuests].flatMap(m => Object.values(m || {}).flatMap(x => Object.values(x || {}))).find(e => e && e.hash === hash);
+      if (dup) return send(res, 200, { ok: false, error: dup.st === 'ok' ? 'Esse comprovante já foi anexado e aprovado.' : 'Esse comprovante já foi anexado, aguarde aprovação.' });
       const now = Date.now(), cur = L.monthKey(now), nxt = L.monthKey(now + 20 * 864e5);
       const mk = [cur, nxt].includes(a.month) ? a.month : cur, [y, m] = mk.split('-').map(Number); /* mês do jogo (pode ser o próximo, no fim do mês) */
       fs.mkdirSync(path.join(UPLOADS, mk), { recursive: true });
@@ -179,14 +183,14 @@ http.createServer(async (req, res) => {
         const bringer = state.players.find(x => x.id === pid);
         const rg = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: [gName, bringer && bringer.fullName, bringer && bringer.name] });
         state.pagGuests ||= {}; state.pagGuests[mk] ||= {};
-        state.pagGuests[mk][gKey] = { ts: now, st: rg.st, by: pid, name: gName, valor: rg.valor || 0 };
+        state.pagGuests[mk][gKey] = { ts: now, st: rg.st, by: pid, name: gName, valor: rg.valor || 0, hash };
         version = Date.now(); save();
         return send(res, 200, { ok: rg.st === 'ok', st: rg.st, why: rg.why || '', error: rg.st === 'ok' ? '' : (rg.why || '').replace('Um admin vai conferir.', 'Confira e anexe outro.') });
       }
       const p = state.players.find(x => x.id === pid);
       const r = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: (p && (p.fullName || p.name)) || '' });
       state.pag ||= {}; state.pag[mk] ||= {};
-      state.pag[mk][pid] = { ts: now, st: r.st, why: r.why || '', ext, valor: r.valor || 0 };
+      state.pag[mk][pid] = { ts: now, st: r.st, why: r.why || '', ext, valor: r.valor || 0, hash };
       version = Date.now(); save();
       return send(res, 200, { ok: true, st: r.st, why: r.why || '', version: version + ':' + pid, isAdmin: false, now, state: L.publicState(state, false, pid) });
     }
