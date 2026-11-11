@@ -152,6 +152,14 @@
     for (const meta of act) {
       if (!s.games[meta.id]) s.games[meta.id] = emptyGame(meta);
       else s.games[meta.id].meta = meta;
+      /* Horário-limite trocado só para um jogo (ex.: abrir a lista até as 18h hoje). */
+      const ov = (s.cutoffOverride || {})[meta.id];
+      if (ov) {
+        const [yy, mm, dd] = meta.id.split('-').map(Number);
+        meta.cutoff = ov; meta.cutoffAt = spTs(yy, mm - 1, dd, ov);
+        const g0 = s.games[meta.id];
+        if (g0.frozen && now < meta.cutoffAt) { g0.frozen = null; if (g0.teams && g0.teams.auto) g0.teams = null; }
+      }
       /* No horário-limite (17h do dia do jogo) a lista fecha com quem está confirmado. */
       const g = s.games[meta.id];
       if (!g.frozen && now >= meta.cutoffAt) {
