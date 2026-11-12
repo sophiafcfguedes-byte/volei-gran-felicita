@@ -513,6 +513,7 @@ function renderHeader() {
 /* Convidado: se anexou comprovante, manda primeiro (lido com o nome do convidado) e só depois coloca na lista. */
 async function addGuestFlow() {
   const el = document.getElementById('g-file'), f = el && el.files && el.files[0];
+  let pend = false;
   if (f) {
     const name = val('g-name').trim();
     if (name.split(/\s+/).filter(w => w.length >= 2).length < 2) return toast('Coloque nome e sobrenome do convidado.', true);
@@ -521,11 +522,12 @@ async function addGuestFlow() {
       const data = await fileToData(f);
       const r = await fetch('api/comprovante', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by: me, auth, type: data.type, data: data.url, guest: name, month: LG.monthKey(S.current ? S.current.startAt : now()) }) }).then(x => x.json());
       if (r.authFail) { toast(r.error, true); return openWho(); }
-      if (!r.ok) return toast(r.error || 'Não consegui confirmar o comprovante.', true);
+      if (!r.ok && r.st !== 'pendente') return toast(r.error || 'Não consegui confirmar o comprovante.', true);
+      if (r.st === 'pendente') pend = true;
     } catch (e) { return toast('Não consegui ler esse arquivo.', true); }
   }
   const morador = !!(P(me) && P(me).morador);
-  return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill'), cpf: val('g-cpf') }, S.current && S.current.guests === false && !isAdmin ? 'Pedido enviado! O convidado entra na lista quando um admin aprovar.' : morador ? 'Convidado adicionado. Você está responsável por liberar a pessoa na portaria.' : 'Convidado adicionado.', ['g-name', 'g-cpf']).then(ok => { if (ok && el) el.value = ''; return ok; });
+  return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill'), cpf: val('g-cpf') }, pend ? 'O comprovante não está no nome do convidado nem no seu, então foi para a comissão conferir. O convidado entra na lista assim que for aprovado.' : S.current && S.current.guests === false && !isAdmin ? 'Pedido enviado! O convidado entra na lista quando um admin aprovar.' : morador ? 'Convidado adicionado. Você está responsável por liberar a pessoa na portaria.' : 'Convidado adicionado.', ['g-name', 'g-cpf']).then(ok => { if (ok && el) el.value = ''; return ok; });
 }
 async function fileToData(f) {
   if (f.size > 12e6) throw new Error('grande');

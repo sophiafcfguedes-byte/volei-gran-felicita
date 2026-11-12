@@ -85,12 +85,12 @@
     return {
       settings: Object.assign({}, s.settings, { max: g.meta.max, teams: g.meta.teams }),
       players: s.players, current: g.meta,
-      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log, frozen: g.frozen || null, promos: g.promos || [], guestReq: g.guestReq || []
+      presences: g.presences, out: g.out, roles: g.roles, teams: g.teams, log: g.log, frozen: g.frozen || null, promos: g.promos || [], guestReq: g.guestReq || [], guestPend: g.guestPend || []
     };
   }
   function writeBack(s, id, v) {
     const g = s.games[id];
-    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log; g.frozen = v.frozen || null; g.promos = v.promos || []; g.guestReq = v.guestReq || [];
+    g.presences = v.presences; g.out = v.out; g.roles = v.roles; g.teams = v.teams; g.log = v.log; g.frozen = v.frozen || null; g.promos = v.promos || []; g.guestReq = v.guestReq || []; g.guestPend = v.guestPend || [];
   }
 
   /* Ajusta estados antigos, fecha jogos que já acabaram (+1 na frequência
@@ -588,6 +588,13 @@
         e.st = a.st === 'ok' ? 'ok' : 'recusado';
         if (e.st === 'ok') e.okTs = now;
         if (e.st === 'ok' && !(e.valor >= 5)) e.valor = 5;
+        /* Aprovado: quem estava esperando esse comprovante entra na lista do jogo em que foi adicionado. */
+        for (const [gid, g] of Object.entries(s.games || {})) {
+          const w = (g.guestPend || []).filter(x => fold(x.name) === a.key);
+          if (!w.length) continue;
+          g.guestPend = g.guestPend.filter(x => fold(x.name) !== a.key);
+          if (e.st === 'ok') for (const x of w) apply(s, { type: 'addGuest', game: gid, by: x.by, name: x.name, skill: x.skill, cpf: x.cpf, gender: x.gender }, { isAdmin: true, now });
+        }
         return ok;
       }
       case 'caixaDel': { if (s.caixa && s.caixa.lanc) s.caixa.lanc = s.caixa.lanc.filter(x => x.id !== a.id); return ok; }
@@ -720,6 +727,13 @@
           return ok;
         }
         if (!p && name.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
+        /* Comprovante do convidado em análise: fica guardado e entra na lista sozinho quando um admin aprovar. */
+        const gpe = ((s.pagGuests || {})[monthKey(meta.startAt)] || {})[fold(name)];
+        if (!admin && !p && gpe && gpe.st === 'pendente') {
+          v.guestPend = (v.guestPend || []).filter(x => fold(x.name) !== fold(name));
+          v.guestPend.push({ name, skill: clampSkill(a.skill), cpf: String(a.cpf || '').replace(/\D/g, ''), gender: a.gender, by: me ? me.id : null, ts: now });
+          return ok;
+        }
         if (!admin && meta.id >= '2026-11-01' && !pagouConvidado(s, name, monthKey(meta.startAt), String(a.cpf || '').replace(/\D/g, ''))) return fail('Anexe o comprovante da vaquinha do convidado (R$ 5,00, com o nome dele e a data deste mês).');
         const gcpf = String(a.cpf || '').replace(/\D/g, '');
         if (!gcpf && !(p && p.guest && p.cpf) && !(me && me.morador)) return fail('Coloque o CPF do convidado (é pra liberar a entrada na portaria).');
