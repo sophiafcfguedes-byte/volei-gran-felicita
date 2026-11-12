@@ -71,7 +71,6 @@ async function avisosTick() {
     // Quem já teve aviso enviado antes (versões antigas) conta como marcado.
     for (const p of g.promos || []) if (state.avisos[p.key] && !newPromos.includes(p)) tg[p.pid] = 1;
     for (const p of newPromos) { if (p.again || tg[p.pid]) continue; text = tagLine(text, p, mentions); tg[p.pid] = 1; }
-    if (AVISOS.publicUrl) text += '\\n' + AVISOS.publicUrl;
     state.avisos[g.id] = Date.now();
     for (const p of newPromos) state.avisos[p.key] = Date.now();
     saveState();
@@ -91,9 +90,8 @@ async function avisosTick() {
     for (const p of novos) state.avisos[p.key] = Date.now();
     saveState();
     const mentions = [];
-    const tags = novos.map((p) => { const jid = jidFor(p); if (jid) { mentions.push(jid); return '@' + jid.split('@')[0]; } return p.name; });
-    let text = '🛡️ Falta cadastrar o CPF pra liberar na portaria: ' + tags.join(' ') + '\\nPreencha no app em *Perfil → Entrada no condomínio* (nome completo e CPF).';
-    if (AVISOS.publicUrl) text += '\\n' + AVISOS.publicUrl;
+    const linhas = novos.map((p) => { const jid = jidFor(p); if (jid) { mentions.push(jid); return p.name + ' @' + jid.split('@')[0]; } return p.name; });
+    const text = '🛡️ Falta cadastrar o CPF pra liberar na portaria:\\n' + linhas.join('\\n') + '\\n\\nPreencha no app em *Perfil → Entrada no condomínio* (nome completo e CPF).';
     try { await sock.sendMessage(groupId, { text, mentions }); try { await sock.sendPresenceUpdate('unavailable'); } catch (e) {} log('Cobrança de CPF enviada (' + g.id + '): ' + novos.map((p) => p.name).join(', ')); }
     catch (e) { logErr('Não consegui mandar a cobrança de CPF:', e.message); }
   }
@@ -104,7 +102,6 @@ async function avisosTick() {
     state.avisos[g.aberto.key] = Date.now(); saveState();
     try {
       let text = '@all ' + g.aberto.text;
-      if (AVISOS.publicUrl) text += '\\n' + AVISOS.publicUrl;
       await sock.sendMessage(groupId, { text, mentionAll: true, contextInfo: { nonJidMentions: 1 } });
       try { await sock.sendPresenceUpdate('unavailable'); } catch (e) {}
       log('Aviso de check-in aberto enviado (' + g.id + ').');
@@ -129,7 +126,6 @@ async function avisosTick() {
     try {
       // @all nativo do WhatsApp (o "@todos" verde): mentionAll no Baileys novo = contextInfo.nonJidMentions = 1.
       let text = '@all ' + g.vagas.text;
-      if (AVISOS.publicUrl) text += '\\n' + AVISOS.publicUrl;
       await sock.sendMessage(groupId, { text, mentionAll: true, contextInfo: { nonJidMentions: 1 } });
       try { await sock.sendPresenceUpdate('unavailable'); } catch (e) {}
       log('Aviso de vagas enviado (' + g.id + ').');
