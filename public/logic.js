@@ -920,7 +920,10 @@
       if (now >= g.meta.openAt && now < g.meta.openAt + 6 * 3600e3 && now < g.meta.cutoffAt) {
         aberto = { key: g.meta.id + ':aberto', text: `check-in aberto! 🏐\n\n🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐\n${g.meta.start} às ${g.meta.end}` };
       }
-      out.push({ aberto, cancel, vagas, teams, promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max || (!!g.meta.private && !!g.frozen && d.confirmed.length >= MIN_QUARTA), /* quarta: às 17h com 12+ a lista vai pro grupo */ text: lines.join('\n') });
+      /* Quem fez check-in e ainda não cadastrou o CPF (e precisa de liberação na portaria): o robô cobra no grupo. */
+      const semCpf = now < g.meta.cutoffAt ? [...d.confirmed, ...d.waitlist].map(id => pm[id]).filter(p => p && !p.guest && !p.morador && !p.cadastrado && !p.fixed && !p.cpf)
+        .map(p => ({ key: g.meta.id + ':cpf:' + p.id, pid: p.id, name: p.name, fullName: p.fullName || '', phone: p.phone || '' })) : [];
+      out.push({ semCpf, aberto, cancel, vagas, teams, promos, id: g.meta.id, group: g.meta.private ? 'quarta' : 'principal', day: g.meta.day, count: d.confirmed.length, max: g.meta.max, full: d.confirmed.length >= g.meta.max || (!!g.meta.private && !!g.frozen && d.confirmed.length >= MIN_QUARTA), /* quarta: às 17h com 12+ a lista vai pro grupo */ text: lines.join('\n') });
     }
     return { games: out };
   }

@@ -83,6 +83,20 @@ async function avisosTick() {
       if (old) { await wait(1500); try { await sock.sendMessage(groupId, { delete: old }); } catch (e) { logErr('Não consegui apagar a lista anterior:', e.message); } }
     } catch (e) { logErr('Não consegui mandar a lista:', e.message); }
   }
+  // Fez check-in sem CPF cadastrado: marca a pessoa no grupo pra preencher (uma vez por jogo).
+  for (const g of data.games || []) {
+    const groupId = rt[g.group]?.groupId;
+    const novos = (g.semCpf || []).filter((p) => !state.avisos[p.key]);
+    if (!groupId || !novos.length) continue;
+    for (const p of novos) state.avisos[p.key] = Date.now();
+    saveState();
+    const mentions = [];
+    const tags = novos.map((p) => { const jid = jidFor(p); if (jid) { mentions.push(jid); return '@' + jid.split('@')[0]; } return p.name; });
+    let text = '🛡️ Falta cadastrar o CPF pra liberar na portaria: ' + tags.join(' ') + '\\nPreencha no app em *Perfil → Entrada no condomínio* (nome completo e CPF).';
+    if (AVISOS.publicUrl) text += '\\n' + AVISOS.publicUrl;
+    try { await sock.sendMessage(groupId, { text, mentions }); try { await sock.sendPresenceUpdate('unavailable'); } catch (e) {} log('Cobrança de CPF enviada (' + g.id + '): ' + novos.map((p) => p.name).join(', ')); }
+    catch (e) { logErr('Não consegui mandar a cobrança de CPF:', e.message); }
+  }
   // Abriu o check-in: "@all check-in aberto" no grupo do jogo (uma vez).
   for (const g of data.games || []) {
     const groupId = rt[g.group]?.groupId;
