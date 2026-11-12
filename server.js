@@ -181,14 +181,14 @@ http.createServer(async (req, res) => {
       fs.writeFileSync(file, buf, { mode: 0o600 });
       if (gName) {
         const bringer = state.players.find(x => x.id === pid);
-        const rg = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: [gName, bringer && bringer.fullName, bringer && bringer.name] });
+        const rg = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: [gName, bringer && bringer.fullName, bringer && bringer.name], cpf: [bringer && bringer.cpf] });
         state.pagGuests ||= {}; state.pagGuests[mk] ||= {};
         state.pagGuests[mk][gKey] = { ts: now, st: rg.st, by: pid, name: gName, valor: rg.valor || 0, hash };
         version = Date.now(); save();
         return send(res, 200, { ok: rg.st === 'ok', st: rg.st, why: rg.why || '', error: rg.st === 'ok' ? '' : (rg.why || '').replace('Um admin vai conferir.', 'Confira e anexe outro.') });
       }
       const p = state.players.find(x => x.id === pid);
-      const r = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: (p && (p.fullName || p.name)) || '' });
+      const r = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: [p && p.fullName, p && p.name], cpf: p && p.cpf });
       state.pag ||= {}; state.pag[mk] ||= {};
       state.pag[mk][pid] = { ts: now, st: r.st, why: r.why || '', ext, valor: r.valor || 0, hash };
       version = Date.now(); save();

@@ -637,7 +637,10 @@
         }
         if (!admin && p.id !== a.by && !p.guest) return fail('Cada um só marca o próprio nome.');
         const ban = !admin && (s.bans || []).find(b => b.pid === p.id && b.game === meta.id);
-        if (!admin && devePagarVaquinha(p, meta) && !pagou(s, p.id, monthKey(meta.startAt))) return fail('Você não fez o pagamento do mês, anexe seu comprovante para fazer seu check-in.');
+        if (!admin && devePagarVaquinha(p, meta) && !pagou(s, p.id, monthKey(meta.startAt))) {
+          const e = ((s.pag || {})[monthKey(meta.startAt)] || {})[p.id];
+          return fail(e && e.st === 'pendente' ? 'Seu comprovante aguarda aprovação. Chame a comissão.' : 'Você não fez o pagamento do mês, anexe seu comprovante para fazer seu check-in.');
+        }
         if (ban && ban.reason === 'falta') return fail('Você não compareceu da última vez e foi punida, aguarde o próximo dia de jogo.');
         if (ban) return fail(`Você tirou o nome do vôlei de ${DAYS[ban.fromDay].toLowerCase()} depois das ${ban.cutoff}, então está fora deste jogo.`);
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
