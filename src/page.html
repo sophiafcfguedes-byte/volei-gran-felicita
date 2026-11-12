@@ -907,7 +907,7 @@ function renderMais() {
         <div class="field"><label for="bulk-text">Nomes</label><textarea id="bulk-text" placeholder="Ana 3,5&#10;Bia&#10;Carla 1"></textarea></div>
         <label class="check"><input type="checkbox" id="bulk-priv"> ${ICON.ball} Todos liberados pro vôlei de ${h(privLabel())}</label>
         <button class="btn btn-primary" data-act="bulk-add">Cadastrar todos</button></details>
-      <div>${players.map(q => `<div class="adm-player">${avatar(q)}<b>${h(nameOf(q))}</b>${q.guest ? '' : ` <button class="link" data-rename="${q.id}">editar nome</button>`}
+      <div>${players.map(q => `<div class="adm-player">${avatar(q)}<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap"><b>${h(nameOf(q))}</b>${q.guest ? '' : `<button class="link" data-rename="${q.id}" style="white-space:nowrap">✏️ editar nome</button>`}</span>
         <div class="ctrls"><select data-edit="${q.id}" data-field="skill" aria-label="Nível de ${h(q.name)}">${opts(SKILLS, q.skill)}</select>
           <select data-edit="${q.id}" data-field="age" aria-label="Faixa etária de ${h(q.name)}">${opts(AGES, q.age || 0)}</select>
           ${q.guest || q.morador || q.fixed ? '' : `<button class="tog setter" aria-pressed="${!!q.caixinha}" data-caixinha="${q.id}" title="Marcado: já pagou, check-in liberado sem comprovante">vaquinha</button>${q.caixinha ? `<label class="by" style="display:inline-flex;gap:4px;align-items:center">desliga em <input type="month" data-vqate="${q.id}" value="${h(q.caixinhaAte || '')}" style="min-height:30px;padding:2px 6px"></label>` : ''}`}
