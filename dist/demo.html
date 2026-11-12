@@ -800,11 +800,11 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       case 'setCpf': {
         /* CPF e nome completo pra liberar a entrada no condomínio (portaria). Só a pessoa e os admins veem. */
         const p = pm[a.id];
-        if (!p || p.guest) return fail('Jogador não encontrado.');
+        if (!p || (p.guest && !admin)) return fail('Jogador não encontrado.');
         if (!admin && a.id !== a.by) return fail('Cada um só cadastra o próprio CPF.');
         const d = String(a.cpf || '').replace(/\D/g, '');
         if (d && !cpfOk(d)) return fail('CPF inválido. Confira os números.');
-        const full = cleanName(a.fullName || '');
+        const full = cleanName(a.fullName || (p.guest ? p.name : ''));
         if (d && full.split(' ').filter(w => w.length >= 2).length < 2) return fail('Escreva seu nome completo (nome e sobrenome).');
         p.cpf = d; p.fullName = d ? full : '';
         return ok;
@@ -1762,7 +1762,7 @@ function renderPortaria() {
   const conf = D.confirmed.filter(pid => P(pid));
   const others = isAdmin ? S.players.filter(p => !p.guest && !conf.includes(p.id)).sort(byName).map(p => p.id) : [];
   const row = pid => { const q = P(pid), st = stOf(pid);
-    if (!isAdmin || q.guest) return `<div class="res-row"><span class="nm" style="flex:1">${h(nameOf(q))}</span>${badge(st)}</div>${errMsg(pid)}`;
+    if (!isAdmin) return `<div class="res-row"><span class="nm" style="flex:1">${h(nameOf(q))}</span>${badge(st)}</div>${errMsg(pid)}`;
     return `<details class="res-row" style="display:block"><summary style="display:flex;gap:10px;align-items:center;cursor:pointer"><span class="nm" style="flex:1">${h(q.name)}</span>${badge(st)}</summary>
       <div style="padding:10px 0 4px"><button class="tog setter" aria-pressed="${!!q.morador}" data-morador="${q.id}">morador</button> <button class="tog setter" aria-pressed="${!!q.cadastrado}" data-cadastrado="${q.id}">cadastrado</button>
       ${q.morador || q.cadastrado ? '' : `<div class="field"><label for="fn-${q.id}">Nome completo</label><input type="text" id="fn-${q.id}" maxlength="70" value="${h(q.fullName || '')}"></div>

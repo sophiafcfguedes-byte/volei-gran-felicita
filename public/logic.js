@@ -495,11 +495,11 @@
       case 'setCpf': {
         /* CPF e nome completo pra liberar a entrada no condomínio (portaria). Só a pessoa e os admins veem. */
         const p = pm[a.id];
-        if (!p || p.guest) return fail('Jogador não encontrado.');
+        if (!p || (p.guest && !admin)) return fail('Jogador não encontrado.');
         if (!admin && a.id !== a.by) return fail('Cada um só cadastra o próprio CPF.');
         const d = String(a.cpf || '').replace(/\D/g, '');
         if (d && !cpfOk(d)) return fail('CPF inválido. Confira os números.');
-        const full = cleanName(a.fullName || '');
+        const full = cleanName(a.fullName || (p.guest ? p.name : ''));
         if (d && full.split(' ').filter(w => w.length >= 2).length < 2) return fail('Escreva seu nome completo (nome e sobrenome).');
         p.cpf = d; p.fullName = d ? full : '';
         return ok;
