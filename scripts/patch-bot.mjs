@@ -35,14 +35,15 @@ function jidFor(p) {
 }
 // Troca "N. Nome" por "N. @pessoa" na lista. Convidado: marca quem trouxe ao lado.
 function tagLine(text, pr, mentions) {
-  const target = pr.guest && pr.by ? pr.by : pr;
+  if (pr.guest) return text; /* convidado: só o nome, sem marcar quem trouxe */
+  const target = pr;
   const jid = jidFor(target);
   if (jid) mentions.push(jid);
   const tag = jid ? '@' + jid.split('@')[0] : '@' + target.name;
-  const shown = pr.by ? pr.name + ' (' + pr.by.name + ')' : pr.name;
+  const shown = pr.name;
   const esc = shown.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&');
   const re = new RegExp('^(\\\\d+\\\\. )' + esc + '$', 'm');
-  const repl = pr.guest && pr.by ? '$1' + pr.name + ' (' + tag + ')' : '$1' + tag;
+  const repl = '$1' + tag;
   return re.test(text) ? text.replace(re, repl) : text;
 }
 async function avisosTick() {

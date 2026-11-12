@@ -903,7 +903,7 @@
     now = now || Date.now();
     const pm = playerMap(s), out = [];
     for (const g of Object.values(s.games).sort((a, b) => a.meta.startAt - b.meta.startAt)) {
-      const nm = id => labelIn(pm, g.presences, id);
+      const nm = id => (pm[id] ? pm[id].name : '?'); /* no grupo: só o nome, sem quem convidou */
       const d = derive(view(s, g.meta.id));
       const p = spParts(g.meta.startAt);
       const dd = String(p.d).padStart(2, '0') + '/' + String(p.m + 1).padStart(2, '0');
