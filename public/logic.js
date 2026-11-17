@@ -466,6 +466,7 @@
         const dup = s.players.find(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== a.id);
         if (dup) return fail(`Já existe alguém chamado ${dup.name}.`);
         let p = a.id ? pm[a.id] : null;
+        if (p && p.name !== name) s.audit = (s.audit || []).concat({ ts: now, act: 'renomeado', pid: p.id, antes: p.name, name }).slice(-200);
         if (!p) { p = { id: newId(s, 'p'), photo: null, freq: 0, fixed: false, priv: false }; s.players.push(p); }
         Object.assign(p, { name, gender: a.gender || p.gender || '', skill: clampSkill(a.skill), paid: !!a.paid, guest: !!a.guest });
         if (a.age !== undefined) p.age = Math.max(0, Math.min(4, Math.round(Number(a.age) || 0)));
@@ -474,6 +475,8 @@
         return ok;
       }
       case 'deletePlayer': {
+        /* Registro de exclusões (pra saber depois o que aconteceu). */
+        if (pm[a.id]) { s.audit = (s.audit || []).concat({ ts: now, act: 'excluído', pid: a.id, name: pm[a.id].name }).slice(-200); }
         s.players = s.players.filter(x => x.id !== a.id);
         for (const g of Object.values(s.games)) {
           g.presences = g.presences.filter(x => x.pid !== a.id);
