@@ -509,7 +509,7 @@
       case 'churrasSet': {
         /* Churrasco (provisório): a pessoa confirma o nome completo e os convidados. */
         if (!churrasAberto(now)) return fail('A lista do churrasco já fechou.');
-        if (!me || !(churrasMembro(me) || admin)) return fail('Essa lista é só pra quem foi convidado.');
+        if (!me || !churrasMembro(me)) return fail('Essa lista é só pra quem foi convidado.');
         const nome = cleanName(a.nome || '');
         if (nome.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque seu nome e sobrenome.');
         const conv = (Array.isArray(a.convidados) ? a.convidados : []).map(x => cleanName(x || '')).filter(Boolean);
@@ -878,7 +878,7 @@
     return { fim: CHURRAS_FIM, meu: conf[meId] || null, lista: Object.entries(conf).sort((a, b) => a[1].ts - b[1].ts).map(([pid, c]) => ({ pid, nome: c.nome, convidados: c.convidados || [] })) };
   };
   function publicState(s, isAdmin, meId) {
-    if (isAdmin) return Object.assign({}, s, { churras: churrasView(s, meId, true), caixaV: caixaView(s), portaria: portaria(s, s.games), agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
+    if (isAdmin) return Object.assign({}, s, { churras: churrasView(s, meId, false), caixaV: caixaView(s), portaria: portaria(s, s.games), agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
     const me = s.players.find(p => p.id === meId);
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
