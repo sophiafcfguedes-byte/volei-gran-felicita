@@ -506,6 +506,20 @@
       }
       case 'toggleMorador': { const p = pm[a.id]; if (p && !p.guest) { p.morador = !p.morador; if (p.morador) p.cadastrado = false; } return ok; }
       case 'toggleCadastrado': { const p = pm[a.id]; if (p && !p.guest) { p.cadastrado = !p.cadastrado; if (p.cadastrado) p.morador = false; } return ok; }
+      case 'churrasSet': {
+        /* Churrasco (provisório): a pessoa confirma o nome completo e os convidados. */
+        if (!churrasAberto(now)) return fail('A lista do churrasco já fechou.');
+        if (!me || !(churrasMembro(me) || admin)) return fail('Essa lista é só pra quem foi convidado.');
+        const nome = cleanName(a.nome || '');
+        if (nome.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque seu nome e sobrenome.');
+        const conv = (Array.isArray(a.convidados) ? a.convidados : []).map(x => cleanName(x || '')).filter(Boolean);
+        const ruim = conv.find(x => x.split(' ').filter(w => w.length >= 2).length < 2);
+        if (ruim) return fail(`Coloque nome e sobrenome do convidado "${ruim}".`);
+        s.churras ||= { conf: {} }; s.churras.conf ||= {};
+        s.churras.conf[me.id] = { nome, convidados: conv.slice(0, 30), ts: now };
+        return ok;
+      }
+      case 'churrasSair': { if (me && s.churras && s.churras.conf) delete s.churras.conf[me.id]; return ok; }
       case 'acessoNow': { s.acessoReq = { game: a.game, ts: now }; return ok; }
       case 'togglePaid': { const p = pm[a.id]; if (p) p.paid = !p.paid; return ok; }
       case 'toggleFixed': {
@@ -851,8 +865,20 @@
     return { inicial: base.valor, comprovantes: n, entradaVaquinha: Math.round(tot * 100) / 100, lanc, saldo: Math.round((base.valor + tot + soma) * 100) / 100 };
   }
 
+  /* ---------- churrasco (provisório, some depois de 22/11) ---------- */
+  const CHURRAS_FIM = Date.parse('2026-11-23T00:00:00-03:00');
+  const CHURRAS_QUEM = ['michelle', 'mercia', 'gustavo', 'elisa', 'laura abreu', 'laura marra', 'valeska', 'magno', 'italo', 'luna'];
+  const churrasAberto = now => now < CHURRAS_FIM;
+  const churrasMembro = p => { if (!p || p.guest) return false; const w = fold((p.name || '') + ' ' + (p.fullName || '')).split(/\s+/); return CHURRAS_QUEM.some(q => q.split(' ').every(x => w.includes(x))); };
+  const churrasView = (s, meId, admin, now) => {
+    if (!churrasAberto(now || Date.now())) return null;
+    const me = s.players.find(p => p.id === meId);
+    if (!admin && !churrasMembro(me)) return null;
+    const conf = (s.churras && s.churras.conf) || {};
+    return { fim: CHURRAS_FIM, meu: conf[meId] || null, lista: Object.entries(conf).sort((a, b) => a[1].ts - b[1].ts).map(([pid, c]) => ({ pid, nome: c.nome, convidados: c.convidados || [] })) };
+  };
   function publicState(s, isAdmin, meId) {
-    if (isAdmin) return Object.assign({}, s, { caixaV: caixaView(s), portaria: portaria(s, s.games), agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
+    if (isAdmin) return Object.assign({}, s, { churras: churrasView(s, meId, true), caixaV: caixaView(s), portaria: portaria(s, s.games), agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
     const me = s.players.find(p => p.id === meId);
     const priv = !!(me && me.priv && !me.guest);
     const games = {};
@@ -861,7 +887,7 @@
     const settings = Object.assign({}, s.settings, { schedule: (s.settings.schedule || []).filter(g => !g.private || priv) });
     const bans = (s.bans || []).filter(b => (!b.private || priv) && b.pid === meId); // cada um só recebe a própria suspensão
     delete settings.moradores;
-    return Object.assign({}, s, { players, games, settings, bans, pag: (() => { const o = {}; for (const [mk, m] of Object.entries(s.pag || {})) if (m[meId]) o[mk] = { [meId]: { st: m[meId].st, why: m[meId].why || '', ts: m[meId].ts } }; return o; })(), suggestions: [], history: (s.history || []).filter(x => !x.private || priv).slice(0, 3), caixaV: caixaView(s), pagGuests: undefined, caixa: undefined, reservas: undefined, portaria: portaria(s, games), acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
+    return Object.assign({}, s, { players, games, settings, bans, pag: (() => { const o = {}; for (const [mk, m] of Object.entries(s.pag || {})) if (m[meId]) o[mk] = { [meId]: { st: m[meId].st, why: m[meId].why || '', ts: m[meId].ts } }; return o; })(), suggestions: [], history: (s.history || []).filter(x => !x.private || priv).slice(0, 3), churras: churrasView(s, meId, false), caixaV: caixaView(s), pagGuests: undefined, caixa: undefined, reservas: undefined, portaria: portaria(s, games), acessos: undefined, acessoReq: undefined, agenda: agenda(s, 0, priv) });
   }
 
   /* Texto das listas abertas (só jogos públicos) — para o robô do WhatsApp. */
