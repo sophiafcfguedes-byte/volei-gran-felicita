@@ -14,6 +14,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Cinzel:wght@700&family=Figtree:wght@400;500;600;700;800&display=swap">
 <style>
+html{touch-action:manipulation;-webkit-text-size-adjust:100%}input,select,textarea{font-size:16px!important}
+
 /* Identidade Gran Felicitá: grená #940B29, dourado #D2A95A, marinho #2E4670, cinza #6F6F6F, gelo #F1F1F1.
    Layout: coluna única de celular; cabeçalho grená com o escudo e a andorinha; navegação fixa embaixo. */
 :root {
@@ -305,6 +307,10 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
 
 <!--LOGIC-->
 <script>
+/* Sem zoom (pinça e toque duplo), também no iPhone. */
+['gesturestart','gesturechange','gestureend'].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
+document.addEventListener('touchmove', e => { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
 (function () {
 const LG = window.VoleiLogic;
 const $ = s => document.querySelector(s);

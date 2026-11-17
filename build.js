@@ -8,7 +8,7 @@ const uri = (f, t) => 'data:' + t + ';base64,' + fs.readFileSync(path.join(__dir
 const ASSETS = { BADGE: uri('badge.webp', 'image/webp'), GLIDE: uri('swallow-glide.webp', 'image/webp'), FRONT: uri('swallow-front.webp', 'image/webp'), ICON: uri('icon.png', 'image/png') };
 const fill = html => html.replace(/\{\{(BADGE|GLIDE|FRONT|ICON)\}\}/g, (m, k) => ASSETS[k]);
 
-const head = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
+const head = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">'
   + '<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body>';
 /* title, meta e link (ícones, manifest) precisam ficar no <head>, senão o Android não reconhece o app. */
 const cut = page.indexOf('<style>');
