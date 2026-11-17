@@ -1114,7 +1114,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     for (let i = 0; i < 30; i++) {
       const q = spParts(Date.UTC(today.y, today.m, today.d + i, 12) - SP);
       if (!(q.wd === 1 || q.wd === 4 || (withWed && q.wd === 3))) continue;
-      const slots = [19, 20].map(h => {
+      const slots = [19, 20, 21].map(h => {
         const a = spTs(q.y, q.m, q.d, h + ':00'), b = a + 3600e3;
         const hit = evs.filter(e => e.start < b && e.end > a).sort((x, y) => x.blocked - y.blocked)[0];
         return { start: a, end: b, who: hit ? hit.who : null, blocked: !!(hit && hit.blocked), pending: !!(hit && hit.pending) };
