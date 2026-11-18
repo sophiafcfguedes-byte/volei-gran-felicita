@@ -27,7 +27,7 @@ const log = m => console.log(new Date().toLocaleString('pt-BR', { timeZone: 'Ame
   if (pend.length) {
     mark.busy = now;
     if (!active) { sh('sudo systemctl start volei-bot'); mark.started = now; log('Ligando o robô: ' + pend.join(', ')); }
-  } else if (active && now - Math.max(mark.busy || 0, mark.started || 0) > 4 * 60e3) {
+  } else if (active && now - Math.max(mark.busy || 0, mark.started || 0) > 10 * 60e3) { /* fica 10 min ligado: dá tempo do WhatsApp confirmar a entrega e não reenviar depois */
     sh('sudo systemctl stop volei-bot'); log('Nada pra mandar: robô desligado.');
   }
   fs.writeFileSync(MARK, JSON.stringify(mark));
