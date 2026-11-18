@@ -46,6 +46,7 @@ function tagLine(text, pr, mentions) {
   const repl = '$1' + tag;
   return re.test(text) ? text.replace(re, repl) : text;
 }
+let avisosDoDisco = false;
 async function avisosTick() {
   if (!connected || !AVISOS.enabled) return;
   let data;
@@ -53,6 +54,15 @@ async function avisosTick() {
   const plain = (o) => o && typeof o === 'object' && !ArrayBuffer.isView(o) && !Array.isArray(o);
   if (!plain(state.avisos)) state.avisos = {};
   if (!plain(state.avisoMsgs)) state.avisoMsgs = {};
+  // Ao ligar, o robô não trazia do disco o que já tinha mandado (e repetia o "check-in aberto"). Junta com o arquivo uma vez.
+  if (!avisosDoDisco) {
+    avisosDoDisco = true;
+    try {
+      const fsm = await import('node:fs');
+      const d = JSON.parse(fsm.readFileSync((process.env.HOME || '/home/ubuntu') + '/volei-bot-v2/state.json', 'utf8'));
+      for (const k of ['avisos', 'avisoMsgs', 'tagged']) if (plain(d[k])) state[k] = Object.assign({}, d[k], plain(state[k]) ? state[k] : {});
+    } catch (e) {}
+  }
   // Quem já foi marcado em cada jogo (por pessoa): nunca marca a mesma pessoa duas vezes no mesmo jogo.
   if (!plain(state.tagged)) state.tagged = {};
   for (const g of data.games || []) {
