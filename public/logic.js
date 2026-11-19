@@ -950,9 +950,9 @@
         teams = { key: g.meta.id + ':times:' + g.teams.ts, text: tl.join('\n') };
       }
       /* Segunda/quinta às 13h: se ainda sobrar vaga, chama todo mundo no grupo (uma vez). */
-      let vagas = null;
+      let vagas = null; /* aviso de "faltam x vagas" desligado a pedido */
       const t13 = spTs(p.y, p.m, p.d, '13:00'), left = g.meta.max - d.confirmed.length;
-      if (!g.meta.private && left > 0 && !g.frozen && now >= t13 && now < g.meta.cutoffAt) {
+      if (false && !g.meta.private && left > 0 && !g.frozen && now >= t13 && now < g.meta.cutoffAt) {
         vagas = { key: g.meta.id + ':vagas13d', text: `🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐\nFaltam ${left} ${left === 1 ? 'vaga' : 'vagas'} a ${left === 1 ? 'ser preenchida' : 'serem preenchidas'} pro vôlei de hoje (${g.meta.start}).` };
       }
       /* Quarta (jogo fechado): se às 17h não tiver 12 confirmados, o vôlei é cancelado e o robô avisa no grupo. */
