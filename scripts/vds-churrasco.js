@@ -25,6 +25,19 @@ const V = require('../lib/vds.js');
     periodos: [{ uuid: '', dtHoraIni: `${hoje}T00:00:00`, dtHoraFim: `${hoje}T23:59:00`, horaIni: '00:00', horaFim: '23:59', domingo: true, segunda: true, terca: true, quarta: true, quinta: true, sexta: true, sabado: true }],
     listaConvidados: true, reserva: { uuid: res.uuid }, nomeEvento: 'Churrasco', observacao: 'Churrasco', visitanteQR: c.visitanteQR, isAdmin: !!u.isAdmin, permissaoReserva: true
   };
-  try { const r = await api('POST', '/autorizacao_acesso', body); console.log('✅ Enviado:', JSON.stringify(r).slice(0, 400)); }
-  catch (e) { console.log('❌ Recusado:', e.message.slice(0, 600)); }
+  /* "Por lista" não pede documento: tenta os formatos possíveis até o Vida de Síndico aceitar. */
+  const semDoc = (f) => body.pessoas.map(pe => f(Object.assign({}, pe)));
+  const tentativas = [
+    ['lista, tipo 1, sem documento', Object.assign({}, body, { tipo: 1, pessoas: semDoc(pe => { delete pe.documento; return pe; }) })],
+    ['lista, tipo 1, documento nulo', Object.assign({}, body, { tipo: 1, pessoas: semDoc(pe => { pe.documento = null; return pe; }) })],
+    ['lista, tipo 0, sem documento', Object.assign({}, body, { pessoas: semDoc(pe => { delete pe.documento; return pe; }) })],
+    ['lista, tipo 0, documento nulo', Object.assign({}, body, { pessoas: semDoc(pe => { pe.documento = null; return pe; }) })],
+    ['lista, tipo 2, sem documento', Object.assign({}, body, { tipo: 2, pessoas: semDoc(pe => { delete pe.documento; return pe; }) })],
+    ['lista, tipo 1, documento tipo vazio', Object.assign({}, body, { tipo: 1, pessoas: semDoc(pe => { pe.documento = { tipo: '', documento: '', estado: '' }; return pe; }) })]
+  ];
+  for (const [nome, b] of tentativas) {
+    try { const r = await api('POST', '/autorizacao_acesso', b); console.log('✅ Enviado (' + nome + '):', JSON.stringify(r).slice(0, 400)); return; }
+    catch (e) { console.log('x ' + nome + ' → ' + e.message.slice(0, 200)); }
+  }
+  console.log('❌ Nenhum formato foi aceito.');
 })().catch(e => console.log('Erro:', e.message));
