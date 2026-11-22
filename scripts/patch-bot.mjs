@@ -162,8 +162,14 @@ function presenceOff() {
   const add = "\n      try { await sock.sendPresenceUpdate('unavailable'); } catch (e) {}";
   if (s.includes(m) && !s.includes(m + add)) s = s.replace(m, () => m + add);
 }
+// Sem sincronizar histórico: o robô só manda aviso, não precisa baixar conversas (era isso que ficava notificando "sincronizando").
+function semHistorico() {
+  if (s.includes('shouldSyncHistoryMessage')) return;
+  s = s.replace(/makeWASocket\(\{/, () => "makeWASocket({\n    syncFullHistory: false, shouldSyncHistoryMessage: () => false, markOnlineOnConnect: false, fireInitQueries: false,");
+}
 function killPolls() {
   presenceOff();
+  semHistorico();
   const head = "async function startRound(round, { test = false, reason = 'agendado' } = {}) {";
   const guard = "\n  if (!POLLS_ENABLED) { log('Enquetes desligadas: a lista é pelo app.'); return; }";
   if (s.includes(head) && !s.includes(head + guard)) s = s.replace(head, () => head + guard);
