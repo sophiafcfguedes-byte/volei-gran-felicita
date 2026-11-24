@@ -8,6 +8,7 @@ const L = require('./public/logic.js');
 const Auth = require('./lib/auth.js');
 const VDS = require('./lib/vds.js');
 const Comprovante = require('./lib/comprovante.js');
+const Push = require('./lib/push.js');
 const UPLOADS = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -29,7 +30,13 @@ function save() {
   fs.writeFileSync(tmp, json);
   fs.renameSync(tmp, DATA_FILE);
   lastSaved = json;
+  /* Apareceu aprovação nova (comprovante ou convidado): avisa os admins no celular. */
+  const n = Push.pendentes(state);
+  if (n > pendAntes) Push.notifyAll().catch(() => {});
+  pendAntes = n;
 }
+let pendAntes = 0;
+try { pendAntes = Push.pendentes(state); } catch (e) {}
 /* A cada 20 s: fecha listas às 17h, sorteia os times e vira o jogo, mesmo sem ninguém abrir o app. */
 setInterval(() => {
   try {
@@ -207,6 +214,12 @@ http.createServer(async (req, res) => {
       return send(res, 404, 'não encontrado', 'text/plain');
     }
     /* Resumo em texto — útil para o robô do WhatsApp mandar no grupo. */
+    if (url.pathname === '/api/push/key' && req.method === 'GET') return send(res, 200, JSON.stringify({ key: Push.publicKey() }), 'application/json');
+    if (url.pathname === '/api/push/sub' && req.method === 'POST') {
+      if (!isAdmin(req)) return send(res, 403, JSON.stringify({ ok: false }), 'application/json');
+      let sub = null; try { sub = await readBody(req, 1e4); } catch (e) {}
+      return send(res, 200, JSON.stringify({ ok: Push.addSub(sub) }), 'application/json');
+    }
     if (url.pathname === '/api/avisos' && req.method === 'GET') {
       /* Só para o robô, na própria máquina: quem vem de fora passa pelo Caddy, que manda X-Forwarded-For. */
       const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress) && !req.headers['x-forwarded-for'];
