@@ -751,7 +751,7 @@
           v.guestPend.push({ name, skill: clampSkill(a.skill), cpf: String(a.cpf || '').replace(/\D/g, ''), gender: a.gender, by: me ? me.id : null, ts: now });
           return ok;
         }
-        if (!admin && !(juHoje(me, now) && gpe) && meta.id >= '2026-11-01' && !pagouConvidado(s, name, monthKey(meta.startAt), String(a.cpf || '').replace(/\D/g, ''))) return fail('Anexe o comprovante da vaquinha do convidado (R$ 5,00, com o nome dele e a data deste mês).');
+        if (!admin && !juHoje(me, now) && meta.id >= '2026-11-01' && !pagouConvidado(s, name, monthKey(meta.startAt), String(a.cpf || '').replace(/\D/g, ''))) return fail('Anexe o comprovante da vaquinha do convidado (R$ 5,00, com o nome dele e a data deste mês).');
         const gcpf = String(a.cpf || '').replace(/\D/g, '');
         if (!gcpf && !(p && p.guest && p.cpf) && !(me && me.morador)) return fail('Coloque o CPF do convidado (é pra liberar a entrada na portaria).');
         if (gcpf && !cpfOk(gcpf)) return fail('CPF do convidado inválido. Confira os números.');
