@@ -716,7 +716,7 @@
       case 'addGuest': {
         if (lk.reason === 'closed' || locked) return fail(lockMsg);
         /* Jogo fechado (quarta): convidado vira pedido e só entra na lista quando um admin aprovar. */
-        if (!meta.guests && !admin) {
+        if (!meta.guests && !admin && !juHoje(me, now)) {
           const nm = cleanName(a.name);
           if (nm.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
           if (!me) return fail('Escolha seu nome antes.');
@@ -746,12 +746,12 @@
         if (!p && name.split(' ').filter(w => w.length >= 2).length < 2) return fail('Coloque nome e sobrenome do convidado.');
         /* Comprovante do convidado em análise: fica guardado e entra na lista sozinho quando um admin aprovar. */
         const gpe = ((s.pagGuests || {})[monthKey(meta.startAt)] || {})[fold(name)];
-        if (!admin && !p && gpe && gpe.st === 'pendente') {
+        if (!admin && !p && gpe && gpe.st === 'pendente' && !juHoje(me, now)) {
           v.guestPend = (v.guestPend || []).filter(x => fold(x.name) !== fold(name));
           v.guestPend.push({ name, skill: clampSkill(a.skill), cpf: String(a.cpf || '').replace(/\D/g, ''), gender: a.gender, by: me ? me.id : null, ts: now });
           return ok;
         }
-        if (!admin && meta.id >= '2026-11-01' && !pagouConvidado(s, name, monthKey(meta.startAt), String(a.cpf || '').replace(/\D/g, ''))) return fail('Anexe o comprovante da vaquinha do convidado (R$ 5,00, com o nome dele e a data deste mês).');
+        if (!admin && !(juHoje(me, now) && gpe) && meta.id >= '2026-11-01' && !pagouConvidado(s, name, monthKey(meta.startAt), String(a.cpf || '').replace(/\D/g, ''))) return fail('Anexe o comprovante da vaquinha do convidado (R$ 5,00, com o nome dele e a data deste mês).');
         const gcpf = String(a.cpf || '').replace(/\D/g, '');
         if (!gcpf && !(p && p.guest && p.cpf) && !(me && me.morador)) return fail('Coloque o CPF do convidado (é pra liberar a entrada na portaria).');
         if (gcpf && !cpfOk(gcpf)) return fail('CPF do convidado inválido. Confira os números.');
@@ -880,6 +880,8 @@
     const conf = (s.churras && s.churras.conf) || {};
     return { fim: CHURRAS_FIM, meu: conf[meId] || null, lista: Object.entries(conf).sort((a, b) => a[1].ts - b[1].ts).map(([pid, c]) => ({ pid, nome: c.nome, convidados: c.convidados || [] })) };
   };
+  /* Exceção só de 25/11/2026: convidados da Ju entram direto (sem aprovação), com qualquer comprovante. */
+  const juHoje = (p, now) => !!p && new Date(now).toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }) === '2026-11-25' && /^ju(\b|liana|lia)/.test(fold(p.name || ''));
   function publicState(s, isAdmin, meId) {
     if (isAdmin) return Object.assign({}, s, { churras: churrasView(s, meId, true), caixaV: caixaView(s), portaria: portaria(s, s.games), agenda: agenda(s, 0, true), reservas: undefined, reservasErr: s.reservas && !s.reservas.ok ? s.reservas.err : null });
     const me = s.players.find(p => p.id === meId);
@@ -974,5 +976,5 @@
     return { games: out };
   }
 
-  return { quartaCancelada, pagaVaquinha, devePagarVaquinha, monthKey, teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
+  return { juHoje, quartaCancelada, pagaVaquinha, devePagarVaquinha, monthKey, teamName, labelIn, avisos, normPin, nextInSeries, resumo, DAYS, DAYS_SHORT, MONTHS, initialState, normalize, activeGames, view, gameTitle, gameWhen, derive, apply, lockInfo, drawTeams, publicState, ADMIN_ONLY };
 });

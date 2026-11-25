@@ -190,6 +190,7 @@ http.createServer(async (req, res) => {
         const bringer = state.players.find(x => x.id === pid);
         const rg = await Comprovante.analisar(file, ext, { y, m: m - 1, nome: [gName, bringer && bringer.fullName, bringer && bringer.name], cpf: [bringer && bringer.cpf] });
         state.pagGuests ||= {}; state.pagGuests[mk] ||= {};
+        if (rg.st !== 'ok' && L.juHoje && L.juHoje(bringer, now)) rg.st = 'ok'; /* só 25/11: convidado da Ju vale com qualquer comprovante */
         state.pagGuests[mk][gKey] = { ts: now, st: rg.st, by: pid, name: gName, valor: rg.valor || 0, hash };
         version = Date.now(); save();
         return send(res, 200, { ok: rg.st === 'ok', st: rg.st, why: rg.why || '', error: rg.st === 'ok' ? '' : (rg.why || '').replace('Um admin vai conferir.', 'Confira e anexe outro.') });
