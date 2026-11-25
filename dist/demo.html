@@ -1237,7 +1237,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   }
 
   const MIN_QUARTA = 12;
-  const quartaCancelada = (v, d) => !!(v && v.current && v.current.private && v.frozen && d.confirmed.length < MIN_QUARTA);
+  const quartaCancelada = (v, d) => !!(v && v.current && v.frozen && d.confirmed.length < MIN_QUARTA);
   function avisos(s, now) {
     now = now || Date.now();
     const pm = playerMap(s), out = [];
@@ -1267,8 +1267,8 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
       }
       /* Quarta (jogo fechado): se às 17h não tiver 12 confirmados, o vôlei é cancelado e o robô avisa no grupo. */
       let cancel = null;
-      if (g.meta.private && g.frozen && d.confirmed.length < MIN_QUARTA) {
-        cancel = { key: g.meta.id + ':cancelado', text: `vôlei cancelado pois não atingiu o número mínimo de pessoas`, title: `🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐` };
+      if (g.frozen && d.confirmed.length < MIN_QUARTA) { /* vale pra todos os dias (segunda, quarta e quinta) */
+        cancel = { key: g.meta.id + ':cancelado', text: `vôlei cancelado por falta de pessoas`, title: `🏐 *VÔLEI DE ${DAYS[g.meta.day].toUpperCase()} (${dd})* 🏐` };
         teams = null;
       }
       /* Abriu o check-in: "@todos check-in aberto" no grupo do jogo (uma vez, até 6h depois de abrir). */
