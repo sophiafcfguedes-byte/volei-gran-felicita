@@ -203,6 +203,29 @@ http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, st: r.st, why: r.why || '', version: version + ':' + pid, isAdmin: false, now, state: L.publicState(state, false, pid) });
     }
     /* Admin vê o comprovante. */
+    /* Comprovante de gasto da caixinha: admin anexa, todo mundo pode ver. */
+    if (url.pathname === '/api/caixa-anexo' && req.method === 'POST') {
+      if (!isAdmin(req)) return send(res, 200, { ok: false, error: 'Só admin anexa comprovante de gasto.' });
+      const a = await readBody(req, 9e6);
+      const x = ((state.caixa || {}).lanc || []).find(l => l.id === a.id);
+      if (!x) return send(res, 200, { ok: false, error: 'Lançamento não encontrado.' });
+      const ext = /pdf/.test(a.type || '') ? 'pdf' : 'jpg';
+      const buf = Buffer.from(String(a.data || '').replace(/^data:[^,]*,/, ''), 'base64');
+      if (buf.length < 500 || buf.length > 6e6) return send(res, 200, { ok: false, error: 'Arquivo inválido ou grande demais (máx. 6 MB).' });
+      fs.mkdirSync(path.join(UPLOADS, 'caixa'), { recursive: true });
+      for (const e of ['pdf', 'jpg']) { try { fs.unlinkSync(path.join(UPLOADS, 'caixa', x.id + '.' + e)); } catch (er) {} }
+      fs.writeFileSync(path.join(UPLOADS, 'caixa', x.id + '.' + ext), buf);
+      x.anexo = ext; version = Date.now(); save();
+      return send(res, 200, { ok: true });
+    }
+    if (url.pathname === '/api/caixa-anexo' && req.method === 'GET') {
+      const id = String(url.searchParams.get('id') || '');
+      const x = ((state.caixa || {}).lanc || []).find(l => l.id === id);
+      if (!x || !x.anexo || !/^[\w-]+$/.test(id)) return send(res, 404, 'não encontrado', 'text/plain');
+      const f = path.join(UPLOADS, 'caixa', id + '.' + x.anexo);
+      if (!fs.existsSync(f)) return send(res, 404, 'não encontrado', 'text/plain');
+      return send(res, 200, fs.readFileSync(f), x.anexo === 'pdf' ? 'application/pdf' : 'image/jpeg');
+    }
     if (url.pathname === '/api/comprovante' && req.method === 'GET') {
       if (!isAdmin(req)) return send(res, 403, 'proibido', 'text/plain');
       const mk = String(url.searchParams.get('month') || ''), gq = url.searchParams.get('guest');

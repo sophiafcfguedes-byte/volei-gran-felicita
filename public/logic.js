@@ -9,7 +9,7 @@
   const DAYS_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
   const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const SETTINGS_VERSION = 8;
-  const ADMIN_ONLY = new Set([
+  const ADMIN_ONLY = new Set(['caixaAnexoDel', 
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
     'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'caixaSaldo', 'pagGuestSet', 'guestApprove', 'guestReject', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
@@ -593,6 +593,11 @@
         s.caixa.lanc.unshift({ id: newId(s, 'x'), ts: now, desc, valor: a.tipo === 'entrada' ? v : -v });
         return ok;
       }
+      case 'caixaAnexoDel': {
+        const x = ((s.caixa || {}).lanc || []).find(l => l.id === a.id);
+        if (!x) return fail('Lançamento não encontrado.');
+        delete x.anexo; return ok;
+      }
       case 'caixaSaldo': {
         const raw = String(a.valor || '').replace(/[^\d,.]/g, ''); const v = Math.round(Number(raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw) * 100) / 100;
         if (!Number.isFinite(v) || raw === '') return fail('Valor inválido.');
@@ -863,7 +868,7 @@
     const base = (s.caixa && s.caixa.base) || { valor: CAIXA_INICIAL, ts: CAIXA_DESDE };
     let n = 0, tot = 0;
     for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && Math.max(e.ts || 0, e.okTs || 0) >= base.ts) { n++; tot += e.valor >= VALOR_VAQUINHA ? e.valor : VALOR_VAQUINHA; } /* soma o valor do comprovante (mínimo R$ 5) */
-    const lanc = ((s.caixa || {}).lanc || []).map(x => ({ id: x.id, ts: x.ts, desc: x.desc, valor: x.valor }));
+    const lanc = ((s.caixa || {}).lanc || []).map(x => ({ id: x.id, ts: x.ts, desc: x.desc, valor: x.valor, anexo: !!x.anexo }));
     const soma = lanc.filter(x => x.ts >= base.ts).reduce((t, x) => t + x.valor, 0);
     return { inicial: base.valor, comprovantes: n, entradaVaquinha: Math.round(tot * 100) / 100, lanc, saldo: Math.round((base.valor + tot + soma) * 100) / 100 };
   }

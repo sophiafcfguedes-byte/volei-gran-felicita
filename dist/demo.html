@@ -317,7 +317,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   const DAYS_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
   const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const SETTINGS_VERSION = 8;
-  const ADMIN_ONLY = new Set([
+  const ADMIN_ONLY = new Set(['caixaAnexoDel', 
     'bulkAdd', 'savePlayer', 'deletePlayer', 'togglePaid', 'toggleFixed', 'togglePriv', 'settings', 'schedule',
     'pagAprovar', 'pagRecusar', 'toggleCaixinha', 'vaquinhaAte', 'caixaAdd', 'caixaDel', 'caixaSaldo', 'pagGuestSet', 'guestApprove', 'guestReject', 'punir', 'draw', 'role', 'toggleMorador', 'toggleCadastrado', 'acessoNow', 'setPin', 'bulkPins', 'genPins', 'lockNow', 'unlock', 'unban', 'resetFreq', 'resetPaid', 'deleteSuggestion'
   ]);
@@ -901,6 +901,11 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         s.caixa.lanc.unshift({ id: newId(s, 'x'), ts: now, desc, valor: a.tipo === 'entrada' ? v : -v });
         return ok;
       }
+      case 'caixaAnexoDel': {
+        const x = ((s.caixa || {}).lanc || []).find(l => l.id === a.id);
+        if (!x) return fail('Lançamento não encontrado.');
+        delete x.anexo; return ok;
+      }
       case 'caixaSaldo': {
         const raw = String(a.valor || '').replace(/[^\d,.]/g, ''); const v = Math.round(Number(raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw) * 100) / 100;
         if (!Number.isFinite(v) || raw === '') return fail('Valor inválido.');
@@ -1171,7 +1176,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
     const base = (s.caixa && s.caixa.base) || { valor: CAIXA_INICIAL, ts: CAIXA_DESDE };
     let n = 0, tot = 0;
     for (const m of [s.pag, s.pagGuests]) for (const mes of Object.values(m || {})) for (const e of Object.values(mes)) if (e && e.st === 'ok' && Math.max(e.ts || 0, e.okTs || 0) >= base.ts) { n++; tot += e.valor >= VALOR_VAQUINHA ? e.valor : VALOR_VAQUINHA; } /* soma o valor do comprovante (mínimo R$ 5) */
-    const lanc = ((s.caixa || {}).lanc || []).map(x => ({ id: x.id, ts: x.ts, desc: x.desc, valor: x.valor }));
+    const lanc = ((s.caixa || {}).lanc || []).map(x => ({ id: x.id, ts: x.ts, desc: x.desc, valor: x.valor, anexo: !!x.anexo }));
     const soma = lanc.filter(x => x.ts >= base.ts).reduce((t, x) => t + x.valor, 0);
     return { inicial: base.valor, comprovantes: n, entradaVaquinha: Math.round(tot * 100) / 100, lanc, saldo: Math.round((base.valor + tot + soma) * 100) / 100 };
   }
@@ -1520,6 +1525,16 @@ async function addGuestFlow() {
   const morador = !!(P(me) && P(me).morador);
   return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill'), cpf: val('g-cpf') }, pend ? 'O comprovante não está no nome do convidado nem no seu, então foi para a comissão conferir. O convidado entra na lista assim que for aprovado.' : S.current && S.current.guests === false && !isAdmin ? 'Pedido enviado! O convidado entra na lista quando um admin aprovar.' : morador ? 'Convidado adicionado. Você está responsável por liberar a pessoa na portaria.' : 'Convidado adicionado.', ['g-name', 'g-cpf']).then(ok => { if (ok && el) el.value = ''; return ok; });
 }
+async function cxAnexar(id, f) {
+  try {
+    toast('Enviando comprovante…');
+    const d = await fileToData(f);
+    const r = await (await fetch('api/caixa-anexo', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': token }, body: JSON.stringify({ id, type: d.type, data: d.url }) })).json();
+    if (!r.ok) return toast(r.error || 'Não consegui anexar.', true);
+    toast('Comprovante anexado.'); await refresh();
+  } catch (e) { toast('Não consegui ler esse arquivo.', true); }
+}
+document.addEventListener('change', e => { const id = e.target && e.target.dataset && e.target.dataset.cxanexo; if (id && e.target.files[0]) cxAnexar(id, e.target.files[0]); });
 async function fileToData(f) {
   if (f.size > 12e6) throw new Error('grande');
   if (/pdf/.test(f.type || '')) return { type: 'application/pdf', url: await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(f); }) };
@@ -1740,12 +1755,13 @@ function renderCaixinha() {
       <div class="field"><label for="cx-desc">Com o que foi</label><input type="text" id="cx-desc" maxlength="80" placeholder="Ex.: bola nova"></div>
       <div class="grid2"><div class="field"><label for="cx-val">Valor (R$)</label><input type="text" id="cx-val" inputmode="numeric" placeholder="0,00"></div>
       <div class="field"><label for="cx-tipo">Tipo</label><select id="cx-tipo"><option value="gasto">Gasto</option><option value="entrada">Entrada</option></select></div></div>
+      <div class="field"><label for="cx-file">Comprovante (opcional)</label><input type="file" id="cx-file" accept="image/*,application/pdf"></div>
       <button class="btn btn-primary" data-act="caixa-add">Lançar</button></div>
     <div class="card"><h2>Acertar saldo</h2><p class="hint">Use se o saldo do app estiver diferente da conta. A partir daí ele continua somando sozinho.</p>
       <div class="field"><label for="cx-saldo">Saldo correto (R$)</label><input type="text" id="cx-saldo" inputmode="numeric" placeholder="0,00"></div>
       <button class="btn btn-ghost" data-act="caixa-saldo">Acertar saldo</button></div>` : ''}
     <div class="card"><h2>Movimentações</h2>
-      ${C.lanc.length ? C.lanc.map(x => `<div class="res-row"><span class="hr" style="min-width:48px">${dm(x.ts)}</span><span class="nm" style="flex:1">${h(x.desc)}</span><b style="color:${x.valor < 0 ? '#c62828' : '#1f9d55'}">${brl(x.valor)}</b>${isAdmin ? `<button class="link" data-cxdel="${x.id}" data-confirm style="color:#940B29">apagar</button>` : ''}</div>`).join('') : '<p class="hint">Nenhum gasto lançado ainda.</p>'}
+      ${C.lanc.length ? C.lanc.map(x => `<div class="res-row"><span class="hr" style="min-width:48px">${dm(x.ts)}</span><span class="nm" style="flex:1">${h(x.desc)}</span><b style="color:${x.valor < 0 ? '#c62828' : '#1f9d55'}">${brl(x.valor)}</b>${isAdmin ? `<button class="link" data-cxdel="${x.id}" data-confirm style="color:#940B29">apagar</button>` : ''}</div>${x.anexo || isAdmin ? `<div class="hint" style="margin:-4px 0 8px 56px;display:flex;gap:14px">${x.anexo ? `<a href="api/caixa-anexo?id=${x.id}" target="_blank" rel="noopener">📎 ver comprovante</a>${isAdmin ? `<button class="link" data-cxanexodel="${x.id}" data-confirm style="color:#940B29">remover comprovante</button>` : ''}` : `<label class="link" style="cursor:pointer">📎 anexar comprovante<input type="file" data-cxanexo="${x.id}" accept="image/*,application/pdf" hidden></label>`}</div>` : ''}`).join('') : '<p class="hint">Nenhum gasto lançado ainda.</p>'}
     </div>`;
 }
 
@@ -2060,6 +2076,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.gpagok || t.dataset.gpagno) return act({ type: 'pagGuestSet', key: t.dataset.gpagok || t.dataset.gpagno, st: t.dataset.gpagok ? 'ok' : 'recusado', month: LG.monthKey(S.current ? S.current.startAt : now()) }, t.dataset.gpagok ? 'Aprovado.' : 'Recusado.');
   if (t.dataset.vergcx) { const w = window.open('', '_blank'); fetch('api/comprovante?month=' + LG.monthKey(S.current ? S.current.startAt : now()) + '&guest=' + encodeURIComponent(t.dataset.vergcx), { headers: { 'x-admin-token': token } }).then(r => r.ok ? r.blob() : Promise.reject()).then(b => { const u = URL.createObjectURL(b); if (w) w.location = u; else location.href = u; }).catch(() => { if (w) w.close(); toast('Não achei o comprovante.', true); }); return; }
   if (t.dataset.gok || t.dataset.gno) return act({ type: t.dataset.gok ? 'guestApprove' : 'guestReject', id: t.dataset.gok || t.dataset.gno }, t.dataset.gok ? 'Convidado aprovado e colocado na lista.' : 'Pedido recusado.');
+  if (t.dataset.cxanexodel) return act({ type: 'caixaAnexoDel', id: t.dataset.cxanexodel }, 'Comprovante removido.');
   if (t.dataset.cxdel) return act({ type: 'caixaDel', id: t.dataset.cxdel }, 'Apagado.');
   if (t.dataset.caixinha) return act({ type: 'toggleCaixinha', id: t.dataset.caixinha });
   if (t.dataset.pagok) return act({ type: 'pagAprovar', pid: t.dataset.pagok, month: LG.monthKey(S.current ? S.current.startAt : now()) }, 'Pagamento aprovado.');
@@ -2085,7 +2102,8 @@ document.addEventListener('click', async e => {
     }
     case 'punir': return act({ type: 'punir', name: val('pun-name') }, 'Pronto: impedido no próximo jogo.', ['pun-name']);
     case 'caixa-saldo': return act({ type: 'caixaSaldo', valor: val('cx-saldo') }, 'Saldo acertado.', ['cx-saldo']);
-    case 'caixa-add': return act({ type: 'caixaAdd', desc: val('cx-desc'), valor: val('cx-val'), tipo: val('cx-tipo') }, 'Lançado.', ['cx-desc', 'cx-val']);
+    case 'caixa-add': { const fe = document.getElementById('cx-file'), f = fe && fe.files && fe.files[0];
+      return act({ type: 'caixaAdd', desc: val('cx-desc'), valor: val('cx-val'), tipo: val('cx-tipo') }, 'Lançado.', ['cx-desc', 'cx-val']).then(ok => { if (ok && f && RAW.caixaV && RAW.caixaV.lanc[0]) cxAnexar(RAW.caixaV.lanc[0].id, f); }); }
     case 'checkin': return setIn(me, true);
     case 'desistir': return setIn(me, false);
     case 'acesso-now': return act({ type: 'acessoNow', game: S.current && S.current.id }, 'Pedido enviado: em até 1 minuto libera no Vida de Síndico.');
