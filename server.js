@@ -32,7 +32,7 @@ function save() {
   lastSaved = json;
   /* Apareceu aprovação nova (comprovante ou convidado): avisa os admins no celular. */
   const n = Push.pendentes(state);
-  if (n > pendAntes) Push.notifyAll().catch(() => {});
+  if (n > pendAntes) Push.notifyAll({ body: 'Tem aprovação esperando por você: comprovante ou convidado.' }, true).catch(() => {});
   pendAntes = n;
 }
 let pendAntes = 0;
@@ -161,6 +161,8 @@ http.createServer(async (req, res) => {
       if (r.ok && a.type === 'loginPlayer') r.auth = Auth.token(SECRET, r.pid, state.players.find(x => x.id === r.pid).pin);
       const meId = r.ok && a.type === 'loginPlayer' ? r.pid : (r.ok ? a.by : a.by);
       if (r.ok || a.type === 'loginPlayer') { version = Date.now(); save(); }
+      /* Gasto lançado na caixinha: avisa todo mundo que ativou as notificações. */
+      if (r.ok && a.type === 'caixaAdd' && a.tipo !== 'entrada') { const x = state.caixa.lanc[0]; Push.notifyAll({ title: '💸 Gasto da caixinha', body: `${x.desc}: R$ ${Math.abs(x.valor).toFixed(2).replace('.', ',')}` }, false).catch(() => {}); }
       return send(res, 200, Object.assign(r, { version: version + ':' + (meId || ''), isAdmin: adm, now: Date.now(), state: L.publicState(state, adm, meId) }));
     }
     /* Caixinha: o jogador manda o comprovante (foto ou PDF) do mês. */
@@ -240,10 +242,10 @@ http.createServer(async (req, res) => {
     /* Resumo em texto — útil para o robô do WhatsApp mandar no grupo. */
     if (url.pathname === '/api/push/key' && req.method === 'GET') return send(res, 200, JSON.stringify({ key: Push.publicKey() }), 'application/json');
     if (url.pathname === '/api/push/sub' && req.method === 'POST') {
-      if (!isAdmin(req)) return send(res, 403, JSON.stringify({ ok: false }), 'application/json');
       let sub = null; try { sub = await readBody(req, 1e4); } catch (e) {}
-      return send(res, 200, JSON.stringify({ ok: Push.addSub(sub) }), 'application/json');
+      return send(res, 200, JSON.stringify({ ok: Push.addSub(sub, isAdmin(req)) }), 'application/json');
     }
+    if (url.pathname === '/api/push/msg' && req.method === 'GET') return send(res, 200, Push.ultima());
     if (url.pathname === '/api/avisos' && req.method === 'GET') {
       /* Só para o robô, na própria máquina: quem vem de fora passa pelo Caddy, que manda X-Forwarded-For. */
       const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress) && !req.headers['x-forwarded-for'];

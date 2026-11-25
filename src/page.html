@@ -890,6 +890,7 @@ function renderMais() {
       <p class="hint">Pra o robô te marcar no grupo quando abrir uma vaga pra você. Só você e a comissão veem.</p>
       <div class="field"><label for="my-phone">DDD + número</label><input type="tel" id="my-phone" value="${h(p.phone || '')}" placeholder="11 98765-4321" autocomplete="tel"></div>
       <button class="btn btn-primary" data-act="save-phone">Salvar celular</button></div>`;
+  html += `<div class="card"><h2>🔔 Notificações</h2><p class="hint">Receba no celular os gastos da caixinha${isAdmin ? ' e os avisos de aprovação (comprovante ou convidado)' : ''}. No iPhone, o app precisa estar na Tela de Início (Compartilhar → Adicionar à Tela de Início).</p><button class="btn btn-primary" data-act="push-on">Ativar notificações</button></div>`;
   html += `<div class="card"><h2>Sugestões pros admins</h2>
       <div class="field"><label for="sug-text">Sua mensagem</label><textarea id="sug-text" maxlength="1000" placeholder="Ideias, reclamações, elogios…"></textarea></div>
       <div class="btns"><button class="btn btn-ghost" data-act="sug-anon">Enviar anônima</button><button class="btn btn-primary" data-act="sug-sign"${p ? '' : ' disabled'}>Enviar com meu nome</button></div></div>
@@ -934,7 +935,6 @@ function renderMais() {
       <p class="hint">Vagas e número de times de cada jogo ficam em <b>Dias de jogo</b>, acima.</p>
       <button class="btn btn-primary" data-act="save-settings">Salvar</button></div>
 
-    <div class="card"><h2>🔔 Avisos de aprovação</h2><p class="hint">Receba uma notificação neste celular quando chegar comprovante ou convidado pra aprovar. No iPhone, o app precisa estar adicionado à Tela de Início.</p><button class="btn btn-primary" data-act="push-on">Ativar notificações</button></div>
     ${comprovantesCard()}
     <div class="card"><h2>Admin · Jogadores</h2>
       <div class="field"><label for="np-name">Novo jogador</label><input type="text" id="np-name" maxlength="40" placeholder="Nome"></div>
@@ -1128,8 +1128,8 @@ document.addEventListener('click', async e => {
         const { key } = await (await fetch('api/push/key')).json();
         const raw = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - key.length % 4) % 4)), c => c.charCodeAt(0));
         const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: raw });
-        const r = await (await fetch('api/push/sub', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': token }, body: JSON.stringify(sub) })).json();
-        toast(r.ok ? 'Pronto! Você vai ser avisada quando tiver aprovação.' : 'Não consegui ativar. Entre como admin e tente de novo.', !r.ok);
+        const r = await (await fetch('api/push/sub', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { 'x-admin-token': token } : {}) }, body: JSON.stringify(sub) })).json();
+        toast(r.ok ? 'Pronto! Notificações ativadas neste celular.' : 'Não consegui ativar.', !r.ok);
       } catch (e) { toast('Não consegui ativar as notificações.', true); }
     })();
     case 'ch-add': chRead(); chDraft.conv.push(''); render(); { const l = document.querySelectorAll('[data-chg]'); if (l.length) l[l.length - 1].focus(); } return;
