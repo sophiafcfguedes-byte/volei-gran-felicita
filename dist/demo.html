@@ -632,7 +632,9 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
   /* Convidado pagou no mês: pelo nome ou pelo CPF (o CPF fica guardado na primeira vez que ele entra). */
   const pagouConvidado = (s, name, mk, cpf) => {
     const m = (s.pagGuests || {})[mk] || {};
-    const e = m[fold(name)] && m[fold(name)].st === 'ok' ? m[fold(name)] : cpf ? Object.values(m).find(x => x.st === 'ok' && x.cpf === cpf) : null;
+    /* Pelo nome (ignorando acento, maiúscula e espaço sobrando) ou pelo CPF: vale o mês todo. */
+    const k = n => fold(String(n || '')).replace(/\s+/g, ' ').trim();
+    const e = Object.entries(m).filter(([, x]) => x && x.st === 'ok').map(([kk, x]) => (k(kk) === k(name) || k(x.name) === k(name) || (cpf && x.cpf === cpf)) ? x : null).find(Boolean) || null;
     if (e && cpf && !e.cpf) e.cpf = cpf;
     return !!e;
   };
@@ -974,7 +976,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; 
         }
         if (!admin && p.id !== a.by && !p.guest) return fail('Cada um só marca o próprio nome.');
         const ban = !admin && (s.bans || []).find(b => b.pid === p.id && b.game === meta.id);
-        if (!admin && devePagarVaquinha(p, meta) && !pagou(s, p.id, monthKey(meta.startAt))) {
+        if (!admin && devePagarVaquinha(p, meta) && !pagou(s, p.id, monthKey(meta.startAt)) && !pagouConvidado(s, p.fullName || p.name, monthKey(meta.startAt), p.cpf || '') && !pagouConvidado(s, p.name, monthKey(meta.startAt), p.cpf || '')) {
           const e = ((s.pag || {})[monthKey(meta.startAt)] || {})[p.id];
           return fail(e && e.st === 'pendente' ? 'Seu comprovante aguarda aprovação. Chame a comissão.' : 'Você não fez o pagamento do mês, anexe seu comprovante para fazer seu check-in.');
         }
