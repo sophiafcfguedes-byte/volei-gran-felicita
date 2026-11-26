@@ -1525,6 +1525,27 @@ async function addGuestFlow() {
   const morador = !!(P(me) && P(me).morador);
   return act({ type: 'addGuest', name: val('g-name'), gender: val('g-gender'), skill: val('g-skill'), cpf: val('g-cpf') }, pend ? 'O comprovante não está no nome do convidado nem no seu, então foi para a comissão conferir. O convidado entra na lista assim que for aprovado.' : S.current && S.current.guests === false && !isAdmin ? 'Pedido enviado! O convidado entra na lista quando um admin aprovar.' : morador ? 'Convidado adicionado. Você está responsável por liberar a pessoa na portaria.' : 'Convidado adicionado.', ['g-name', 'g-cpf']).then(ok => { if (ok && el) el.value = ''; return ok; });
 }
+/* Notificações: pede a permissão sozinho no primeiro toque no app (o celular exige um toque e um "Permitir"). */
+async function pushOn(silencioso) {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) { if (!silencioso) toast(/iPhone|iPad/.test(navigator.userAgent) ? 'No iPhone: abra o app pelo ícone da Tela de Início (Compartilhar → Adicionar à Tela de Início).' : 'Este navegador não aceita notificações.', true); return; }
+    if (Notification.permission === 'denied') { if (!silencioso) toast('Notificações bloqueadas. Libere nas configurações do celular.', true); return; }
+    if (await Notification.requestPermission() !== 'granted') return;
+    const reg = await navigator.serviceWorker.register('/sw.js'); await navigator.serviceWorker.ready;
+    const { key } = await (await fetch('api/push/key')).json();
+    const raw = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - key.length % 4) % 4)), c => c.charCodeAt(0));
+    const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: raw });
+    const r = await (await fetch('api/push/sub', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'x-admin-token': token } : {}), body: JSON.stringify(sub) })).json();
+    if (!silencioso) toast(r.ok ? 'Notificações ativadas.' : 'Não consegui ativar.', !r.ok);
+  } catch (e) { if (!silencioso) toast('Não consegui ativar as notificações.', true); }
+}
+let pushTentou = false;
+document.addEventListener('click', () => {
+  if (pushTentou || !('Notification' in window)) return;
+  pushTentou = true;
+  if (Notification.permission === 'granted') pushOn(true); /* já permitido: só garante a inscrição (e marca admin) */
+  else if (Notification.permission === 'default') pushOn(true);
+}, true);
 async function cxAnexar(id, f) {
   try {
     toast('Enviando comprovante…');
@@ -1877,7 +1898,6 @@ function renderMais() {
       <p class="hint">Pra o robô te marcar no grupo quando abrir uma vaga pra você. Só você e a comissão veem.</p>
       <div class="field"><label for="my-phone">DDD + número</label><input type="tel" id="my-phone" value="${h(p.phone || '')}" placeholder="11 98765-4321" autocomplete="tel"></div>
       <button class="btn btn-primary" data-act="save-phone">Salvar celular</button></div>`;
-  html += `<div class="card"><h2>🔔 Notificações</h2><p class="hint">Receba no celular os gastos da caixinha${isAdmin ? ' e os avisos de aprovação (comprovante ou convidado)' : ''}. No iPhone, o app precisa estar na Tela de Início (Compartilhar → Adicionar à Tela de Início).</p><button class="btn btn-primary" data-act="push-on">Ativar notificações</button></div>`;
   html += `<div class="card"><h2>Sugestões pros admins</h2>
       <div class="field"><label for="sug-text">Sua mensagem</label><textarea id="sug-text" maxlength="1000" placeholder="Ideias, reclamações, elogios…"></textarea></div>
       <div class="btns"><button class="btn btn-ghost" data-act="sug-anon">Enviar anônima</button><button class="btn btn-primary" data-act="sug-sign"${p ? '' : ' disabled'}>Enviar com meu nome</button></div></div>
@@ -2107,7 +2127,8 @@ document.addEventListener('click', async e => {
     case 'checkin': return setIn(me, true);
     case 'desistir': return setIn(me, false);
     case 'acesso-now': return act({ type: 'acessoNow', game: S.current && S.current.id }, 'Pedido enviado: em até 1 minuto libera no Vida de Síndico.');
-    case 'push-on': return (async () => {
+    case 'push-on': return pushOn(false);
+    case 'push-on-old': return (async () => {
       try {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return toast(/iPhone|iPad/.test(navigator.userAgent) ? 'No iPhone: abra o app pelo ícone da Tela de Início (Compartilhar → Adicionar à Tela de Início) e tente de novo.' : 'Este navegador não aceita notificações.', true);
         if (await Notification.requestPermission() !== 'granted') return toast('Notificações não foram permitidas. Libere nas configurações do celular.', true);
